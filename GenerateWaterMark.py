@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
-from DecryptWaterMarkFlask import encrypt_watermark, create_watermark_data
+from Crypter import encrypt_watermark, create_watermark_data
 
 
 def calculate_time(base_date, base_time, minute_offset=0):
@@ -62,7 +62,8 @@ def draw_rounded_rectangle(draw, x, y, width, height, radius, fill, alpha=128):
     main_image.paste(temp_image, (int(x), int(y)), temp_image)
 
 
-def add_watermark_to_image(original_image_path, name="梁振卓", user_number="2409840", base_date=None, base_time=None, output_path="output_watermarked.jpg",
+def add_watermark_to_image(original_image_path, name="梁振卓", user_number="2409840", base_date=None, base_time=None,
+                           output_path="output_watermarked.jpg",
                            minute_offset=0):
     """
     给单张图片添加水印
@@ -288,16 +289,3 @@ def calculate_crop_area(width, height):
             'dWidth': 1080,
             'dHeight': 1920
         }
-
-
-# 使用示例
-if __name__ == "__main__":
-    from Utils import Utils
-    utils = Utils()
-
-    original_image_path = utils.get_random_template_file("XFTD")  # 输入图片路径
-
-    # 添加水印
-    result_path = add_watermark_to_image(original_image_path)
-
-    print(f"水印图片已生成: {result_path}")
