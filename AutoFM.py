@@ -446,9 +446,9 @@ class AutoZYT:
                     if datetime.datetime.today().hour < 12:
                         continue
 
-                    random_minute2 = random.randint(14, 16)  # 15:14 ~ 15:16
-                    random_minute3 = random.randint(17, 19)  # 15:17 ~ 15:19
-                    random_minute4 = random.randint(17, 19)  # 15:17 ~ 15:19
+                    random_minute2 = random.randint(30, 33)  # 15:30 ~ 15:33
+                    random_minute3 = random.randint(34, 36)  # 15:34 ~ 15:36
+                    random_minute4 = random.randint(37, 39)  # 15:37 ~ 15:39
 
                     # 添加水印
                     add_watermark_to_image(utils.get_random_template_file("KZF/2"),
