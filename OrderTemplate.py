@@ -433,3 +433,78 @@ def order_template_TTFX(objCodes: list, wrids: list, marked_image1: str, marked_
             "wrid": wrids[8]
         }
     ]
+
+
+# 空置房巡查月巡检 workResult
+def order_template_KZF(objCodes: list, wrids: list, marked_image1: str, marked_image2: str, marked_image3: str,
+                       marked_image4: str):
+    return [
+        {
+            "objCode": objCodes[0],
+            "result": [
+                marked_image1
+            ],
+            "step": "1",
+            "type": "photograph",
+            "wrid": wrids[0]
+        },
+        {
+            "objCode": objCodes[1],
+            "result": [
+                marked_image2
+            ],
+            "step": "2",
+            "type": "photograph",
+            "wrid": wrids[1]
+        },
+        {
+            "objCode": objCodes[2],
+            "result": "正常",
+            "step": "3",
+            "type": "onechoose",
+            "wrid": wrids[2]
+        },
+        {
+            "objCode": objCodes[3],
+            "result": [
+                marked_image3
+            ],
+            "step": "3.1",
+            "type": "photograph",
+            "wrid": wrids[3]
+        },
+        {
+            "objCode": objCodes[4],
+            "result": [
+                "0"
+            ],
+            "step": "4",
+            "type": "estimate",
+            "wrid": wrids[4]
+        },
+        {
+            "objCode": objCodes[5],
+            "result": [
+                "0"
+            ],
+            "step": "5",
+            "type": "estimate",
+            "wrid": wrids[5]
+        },
+        {
+            "objCode": objCodes[6],
+            "result": [
+                marked_image4
+            ],
+            "step": "6",
+            "type": "photograph",
+            "wrid": wrids[6]
+        },
+        {
+            "objCode": objCodes[7],
+            "result": "无",
+            "step": "7",
+            "type": "describe",
+            "wrid": wrids[7]
+        }
+    ]

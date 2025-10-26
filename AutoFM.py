@@ -9,7 +9,7 @@ import json
 
 from GenerateWaterMark import add_watermark_to_image
 from OrderTemplate import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
-    order_template_QC, order_template_TTFX
+    order_template_QC, order_template_TTFX, order_template_KZF
 from Utils import Utils
 from Notification import Notify
 
@@ -296,13 +296,14 @@ class AutoZYT:
                         add_watermark_to_image(utils.get_random_template_file("XFTD"), base_time=f'10:{random_minute}')
                     else:
                         # 下午消防通道工单
-                        random_minute = random.randint(40, 59)  # 14:20 ~ 14:30
+                        random_minute = random.randint(40, 59)  # 14:40 ~ 14:59
                         add_watermark_to_image(utils.get_random_template_file("XFTD"), base_time=f'14:{random_minute}')
                     oss_pic_url = self.upload_oss("output_watermarked.jpg")
 
                     submit_data['workData']['workResult'] = order_template_XFTD(objCodes, wrids, oss_pic_url)
 
                     self.submit_order(submit_data)
+
                 elif order['title'] == "四乱二扰日巡检（白）":
                     # 开始处理
                     print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
@@ -322,6 +323,7 @@ class AutoZYT:
                                                                                 oss_pic_url2)
 
                     self.submit_order(submit_data)
+
                 elif order['title'] == "公共区域风险隐患排查日巡检工单":
                     # 开始处理
                     print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
@@ -348,6 +350,7 @@ class AutoZYT:
                                                                                 oss_pic_url2)
 
                     self.submit_order(submit_data)
+
                 elif order['title'] == "门岗BI&5S日巡检":
                     # 开始处理
                     print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
@@ -372,6 +375,7 @@ class AutoZYT:
                                                                               oss_pic_url2)
 
                     self.submit_order(submit_data)
+
                 elif order['title'] == "外来人员清场日巡查工单":
                     # 开始处理
                     print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
@@ -386,6 +390,7 @@ class AutoZYT:
                     submit_data['workData']['workResult'] = order_template_QC(objCodes, wrids, oss_pic_url)
 
                     self.submit_order(submit_data)
+
                 elif order['title'] == "天台风险月巡查":
                     if ttfx_is_deal:
                         continue
@@ -430,6 +435,39 @@ class AutoZYT:
 
                     submit_data['workData']['workResult'] = order_template_TTFX(objCodes, wrids, oss_pic_url1,
                                                                                 oss_pic_url2, oss_pic_url3)
+
+                    self.submit_order(submit_data)
+
+                elif order['title'] == "空置房巡查月巡检":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
+                    if datetime.datetime.today().hour < 12:
+                        continue
+
+                    random_minute2 = random.randint(14, 16)  # 15:14 ~ 15:16
+                    random_minute3 = random.randint(17, 19)  # 15:17 ~ 15:19
+                    random_minute4 = random.randint(17, 19)  # 15:17 ~ 15:19
+
+                    # 添加水印
+                    add_watermark_to_image(utils.get_random_template_file("KZF/2"),
+                                           base_time=f'15:{random_minute2}')
+                    oss_pic_url2 = self.upload_oss("output_watermarked.jpg")
+
+                    add_watermark_to_image(utils.get_random_template_file("KZF/3"),
+                                           base_time=f'15:{random_minute3}')
+                    oss_pic_url3 = self.upload_oss("output_watermarked.jpg")
+
+                    add_watermark_to_image(utils.get_random_template_file("KZF/4"),
+                                           base_time=f'15:{random_minute4}')
+                    oss_pic_url4 = self.upload_oss("output_watermarked.jpg")
+
+                    objCodes.insert(3, step_info[2]['children'][0]['objCode'])
+                    wrids.insert(3, step_info[2]['children'][0]['wrId'])
+
+                    submit_data['workData']['workResult'] = order_template_KZF(objCodes, wrids, f"{oss_pic_url2}123",
+                                                                               oss_pic_url2, oss_pic_url3, oss_pic_url4)
 
                     self.submit_order(submit_data)
 
