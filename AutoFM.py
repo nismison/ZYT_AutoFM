@@ -1,5 +1,6 @@
 import datetime
 import random
+import re
 import uuid
 import os
 
@@ -8,14 +9,14 @@ import json
 
 from GenerateWaterMark import add_watermark_to_image
 from OrderTemplate import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
-    order_template_QC
+    order_template_QC, order_template_TTFX
 from Utils import Utils
 from Notification import Notify
 
 utils = Utils()
 notify = Notify()
 
-BASIC_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MDE3Njk4NCwiZXhwIjoxNzYwNzgxNzg0fQ.gEy7ESWXcxB56ER7NPRiadPC4EsdauCbFbFJ4S7MWnE"
+BASIC_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MTQ0ODE4MywiZXhwIjoxNzYyMDUyOTgzfQ.GDsxLUzR-Sn_R2VhiFFRMDAO9cyt2OtpY_WBezuzWYA"
 
 
 class AutoZYT:
@@ -74,6 +75,7 @@ class AutoZYT:
 
         response3 = requests.get(response2.headers['Location'], allow_redirects=False)
         self.token = response3.cookies.get('TokenFM')
+        print(f">>>>>>>>>>Token 初始化完成<<<<<<<<<<")
 
     # 初始化oss仓库
     def get_oss_policy(self):
@@ -121,7 +123,7 @@ class AutoZYT:
             'success_action_status': '200'
         }
         files = [
-            ('file', (f'{file_uuid}.{file_ext}', open(file_path, 'rb'), 'null'))
+            ('file', (f'{file_uuid}.{file_ext}', open(file_path, 'rb'), 'None'))
         ]
 
         response = requests.post(self.oss['host'], data=payload, files=files)
@@ -242,18 +244,12 @@ class AutoZYT:
 
     # 批量处理工单
     def deal_order(self):
+        ttfx_is_deal = False
+
         for order in self.fm_need_deal_list:
             # 待验收的临时工单不用管
             if order['status'] == '10':
                 continue
-            if "日巡查" not in order['title'] and "日巡检" not in order['title']:
-                continue
-
-            # 开始处理
-            # print(f">>>>>>>>>>order: {json.dumps(order)}<<<<<<<<<<")
-            print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
-
-            self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
 
             for task_info in order['taskInfoVo']:
                 # 工单数据
@@ -289,6 +285,10 @@ class AutoZYT:
                     wrids.append(step['wrId'])
 
                 if order['title'] == "外围消防通道日巡查工单":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
                     # 添加水印
                     if datetime.datetime.today().hour < 12:
                         # 上午消防通道工单
@@ -296,7 +296,7 @@ class AutoZYT:
                         add_watermark_to_image(utils.get_random_template_file("XFTD"), base_time=f'10:{random_minute}')
                     else:
                         # 下午消防通道工单
-                        random_minute = random.randint(40, 59)  # 10:20 ~ 10:30
+                        random_minute = random.randint(40, 59)  # 14:20 ~ 14:30
                         add_watermark_to_image(utils.get_random_template_file("XFTD"), base_time=f'14:{random_minute}')
                     oss_pic_url = self.upload_oss("output_watermarked.jpg")
 
@@ -304,6 +304,10 @@ class AutoZYT:
 
                     self.submit_order(submit_data)
                 elif order['title'] == "四乱二扰日巡检（白）":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
                     # 添加水印
                     random_minute_1 = random.randint(10, 15)  # 10:10 ~ 10:15
                     random_minute_2 = random.randint(15, 20)  # 10:15 ~ 10:20
@@ -319,6 +323,10 @@ class AutoZYT:
 
                     self.submit_order(submit_data)
                 elif order['title'] == "公共区域风险隐患排查日巡检工单":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
                     random_minute_1 = random.randint(30, 35)  # 10:30 ~ 10:35
                     random_minute_2 = random.randint(35, 40)  # 10:35 ~ 10:40
 
@@ -341,6 +349,10 @@ class AutoZYT:
 
                     self.submit_order(submit_data)
                 elif order['title'] == "门岗BI&5S日巡检":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
                     random_minute_1 = random.randint(40, 45)  # 10:40 ~ 10:45
                     random_minute_2 = random.randint(45, 50)  # 10:45 ~ 10:50
 
@@ -361,6 +373,10 @@ class AutoZYT:
 
                     self.submit_order(submit_data)
                 elif order['title'] == "外来人员清场日巡查工单":
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
                     random_minute = random.randint(50, 59)  # 10:50 ~ 10:59
 
                     # 添加水印
@@ -370,11 +386,57 @@ class AutoZYT:
                     submit_data['workData']['workResult'] = order_template_QC(objCodes, wrids, oss_pic_url)
 
                     self.submit_order(submit_data)
+                elif order['title'] == "天台风险月巡查":
+                    if ttfx_is_deal:
+                        continue
+
+                    ttfx_is_deal = True
+                    # 开始处理
+                    print(f">>>>>>>>>>开始处理工单: {order['title']}[{order['workOrderNo']}]<<<<<<<<<<")
+                    self.start_deal_order(order['workOrderNo'], order['woType'], order['source'])
+
+                    # ============= 获取楼栋号 =============
+                    # matches = re.findall(r"[a-zA-Z]\d+", order['address'])
+                    # print(f">>>>>>>>>>matches[0]: {matches[0]}<<<<<<<<<<")
+
+                    if datetime.datetime.today().hour < 12:
+                        # 上午天台风险工单
+                        ttfx_hour = 11
+                    else:
+                        # 下午天台风险工单
+                        ttfx_hour = 15
+
+                    random_minute1 = random.randint(10, 13)  # 11:10 ~ 11:13
+                    random_minute2 = random.randint(14, 16)  # 11:14 ~ 11:16
+                    random_minute3 = random.randint(17, 19)  # 11:17 ~ 11:19
+
+                    # 添加水印
+                    add_watermark_to_image(utils.get_random_template_file("TTFX/1"),
+                                           base_time=f'{ttfx_hour}:{random_minute1}')
+                    oss_pic_url1 = self.upload_oss("output_watermarked.jpg")
+
+                    add_watermark_to_image(utils.get_random_template_file("TTFX/2"),
+                                           base_time=f'{ttfx_hour}:{random_minute2}')
+                    oss_pic_url2 = self.upload_oss("output_watermarked.jpg")
+
+                    add_watermark_to_image(utils.get_random_template_file("TTFX/3"),
+                                           base_time=f'{ttfx_hour}:{random_minute3}')
+                    oss_pic_url3 = self.upload_oss("output_watermarked.jpg")
+
+                    objCodes.insert(5, step_info[4]['children'][0]['objCode'])
+                    wrids.insert(5, step_info[4]['children'][0]['wrId'])
+                    objCodes.insert(3, step_info[2]['children'][0]['objCode'])
+                    wrids.insert(3, step_info[2]['children'][0]['wrId'])
+
+                    submit_data['workData']['workResult'] = order_template_TTFX(objCodes, wrids, oss_pic_url1,
+                                                                                oss_pic_url2, oss_pic_url3)
+
+                    self.submit_order(submit_data)
 
 
-# if __name__ == '__main__':
-#     auto_zyt = AutoZYT()
-#     auto_zyt.get_fm_task_list()
-#     auto_zyt.grab_fm_task()
-#     auto_zyt.get_need_deal_order()
-#     auto_zyt.deal_order()
+if __name__ == '__main__':
+    auto_zyt = AutoZYT()
+    # auto_zyt.get_fm_task_list()
+    # auto_zyt.grab_fm_task()
+    auto_zyt.get_need_deal_order()
+    auto_zyt.deal_order()

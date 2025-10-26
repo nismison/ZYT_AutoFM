@@ -352,3 +352,84 @@ def order_template_QC(objCodes: list, wrids: list, marked_image: str):
             "wrid": wrids[3]
         }
     ]
+
+
+# 天台风险月巡查 workResult
+def order_template_TTFX(objCodes: list, wrids: list, marked_image1: str, marked_image2: str, marked_image3: str):
+    return [
+        {
+            "objCode": objCodes[0],
+            "result": [
+                "1"
+            ],
+            "step": "1",
+            "type": "estimate",
+            "wrid": wrids[0]
+        },
+        {
+            "objCode": objCodes[1],
+            "result": [
+                "1"
+            ],
+            "step": "2",
+            "type": "estimate",
+            "wrid": wrids[1]
+        },
+        {
+            "objCode": objCodes[2],
+            "result": "是",
+            "step": "3",
+            "type": "onechoose",
+            "wrid": wrids[2]
+        },
+        {
+            "objCode": objCodes[3],
+            "result": [
+                marked_image1
+            ],
+            "step": "3.1",
+            "type": "photograph",
+            "wrid": wrids[3]
+        },
+        {
+            "objCode": objCodes[4],
+            "result": [
+                "1"
+            ],
+            "step": "4",
+            "type": "estimate",
+            "wrid": wrids[4]
+        },
+        {
+            "objCode": objCodes[5],
+            "result": "是",
+            "step": "5",
+            "type": "onechoose",
+            "wrid": wrids[5]
+        },
+        {
+            "objCode": objCodes[6],
+            "result": [
+                marked_image2
+            ],
+            "step": "5.1",
+            "type": "photograph",
+            "wrid": wrids[6]
+        },
+        {
+            "objCode": objCodes[7],
+            "result": [
+                marked_image3
+            ],
+            "step": "6",
+            "type": "photograph",
+            "wrid": wrids[7]
+        },
+        {
+            "objCode": objCodes[8],
+            "result": "无",
+            "step": "7",
+            "type": "describe",
+            "wrid": wrids[8]
+        }
+    ]
