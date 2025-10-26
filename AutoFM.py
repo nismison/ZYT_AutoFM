@@ -15,7 +15,7 @@ from Notification import Notify
 utils = Utils()
 notify = Notify()
 
-BASIC_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MDA3MjgzOSwiZXhwIjoxNzYwNjc3NjM5fQ.QyWsam0VIRDgJYOzkfdxYrGheIs9s-VTdGe-24MA6VE"
+BASIC_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MDE3Njk4NCwiZXhwIjoxNzYwNzgxNzg0fQ.gEy7ESWXcxB56ER7NPRiadPC4EsdauCbFbFJ4S7MWnE"
 
 
 class AutoZYT:
@@ -212,6 +212,8 @@ class AutoZYT:
                 self.get_need_deal_order(page_num + 1)
             else:
                 print(f"待处理工单获取完成: {len(self.fm_need_deal_list)}")
+        else:
+            print(f">>>>>>>>>>response.status_code: {response.status_code}<<<<<<<<<<")
 
     # 开始处理工单
     def start_deal_order(self, work_no, work_type, source):
