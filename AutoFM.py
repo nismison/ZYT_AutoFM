@@ -1,17 +1,16 @@
 import datetime
-import random
-import re
-import uuid
+import json
 import os
+import random
+import uuid
 
 import requests
-import json
 
 from GenerateWaterMark import add_watermark_to_image
+from Notification import Notify
 from OrderTemplate import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_TTFX, order_template_KZF
 from Utils import Utils
-from Notification import Notify
 
 utils = Utils()
 notify = Notify()
@@ -48,6 +47,9 @@ class AutoZYT:
         self.fm_task_list = []
         self.fm_need_deal_list = []
 
+        self.session = requests.Session()
+        self.session.timeout = 5
+
         self.init_fm_token()
 
     def init_fm_token(self):
@@ -66,14 +68,14 @@ class AutoZYT:
         headers1 = {
             "User-Agent": "VKStaffAssistant-Android-6.36.0-Mozilla/5.0 (Linux; Android 12; NTH-AN00 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/101.0.4951.61 Mobile Safari/537.36",
         }
-        response1 = requests.get(self.GO_FM_ORDER_URL, params=params1, headers=headers1, allow_redirects=False)
+        response1 = self.session.get(self.GO_FM_ORDER_URL, params=params1, headers=headers1, allow_redirects=False)
 
         headers2 = {
             "authorization": f"Bearer {basic_token}",
         }
-        response2 = requests.get(response1.headers['Location'], headers=headers2, allow_redirects=False)
+        response2 = self.session.get(response1.headers['Location'], headers=headers2, allow_redirects=False)
 
-        response3 = requests.get(response2.headers['Location'], allow_redirects=False)
+        response3 = self.session.get(response2.headers['Location'], allow_redirects=False)
         self.token = response3.cookies.get('TokenFM')
         print(f">>>>>>>>>>Token 初始化完成<<<<<<<<<<")
 
@@ -85,7 +87,7 @@ class AutoZYT:
             'Authorization': self.token,
         }
 
-        response = requests.get(self.OSS_POLICY, headers=headers)
+        response = self.session.get(self.OSS_POLICY, headers=headers)
 
         if response.status_code == 200:
             response_json = response.json()
@@ -99,7 +101,14 @@ class AutoZYT:
 
     # 上传oss
     def upload_oss(self, file_path="C:\\Users\\27846\\Desktop\\home_fill.png"):
-        self.get_oss_policy()
+        if not all([
+            self.oss['host'],
+            self.oss['access_key'],
+            self.oss['signature'],
+            self.oss['policy'],
+            self.oss['dir']
+        ]):
+            self.get_oss_policy()
 
         print(f"开始上传图片")
 
@@ -126,7 +135,7 @@ class AutoZYT:
             ('file', (f'{file_uuid}.{file_ext}', open(file_path, 'rb'), 'None'))
         ]
 
-        response = requests.post(self.oss['host'], data=payload, files=files)
+        response = self.session.post(self.oss['host'], data=payload, files=files)
 
         if response.status_code == 200:
             print(f"图片上传完成: https://vk-fmmob.oss-cn-shenzhen.aliyuncs.com/{payload['key']}")
@@ -146,7 +155,7 @@ class AutoZYT:
         }
 
         print(f"当前第 {page_number} 页")
-        response = requests.post(self.FM_TASK_LIST_URL, data=json.dumps(payload), headers=headers)
+        response = self.session.post(self.FM_TASK_LIST_URL, data=json.dumps(payload), headers=headers)
         response_json = response.json()
 
         if response_json['code'] != '200':
@@ -179,7 +188,7 @@ class AutoZYT:
                 'Authorization': self.token,
             }
 
-            response = requests.post(url, data=json.dumps(payload), headers=headers).json()
+            response = self.session.post(url, data=json.dumps(payload), headers=headers).json()
 
             if response['code'] == "200":
                 print(f"【{fm_task['title']}】接单成功: 单号：{payload['workOrderNo']}")
@@ -204,7 +213,7 @@ class AutoZYT:
             'Cookie': f"TokenFM={self.token}"
         }
 
-        response = requests.post(self.NEED_DEAL_ORDER_URL, data=json.dumps(payload), headers=headers)
+        response = self.session.post(self.NEED_DEAL_ORDER_URL, data=json.dumps(payload), headers=headers)
 
         if response.status_code == 200 and response.json()['code'] == "200":
             response_json = response.json()
@@ -228,7 +237,7 @@ class AutoZYT:
             'Authorization': self.token,
         }
 
-        requests.post(self.START_DEAL_ORDER, data=json.dumps(payload), headers=headers)
+        self.session.post(self.START_DEAL_ORDER, data=json.dumps(payload), headers=headers)
 
     # 提交工单
     def submit_order(self, submit_payload):
@@ -236,7 +245,7 @@ class AutoZYT:
             'Authorization': self.token,
         }
 
-        response = requests.post(self.SUBMIT_ORDER_URL, data=json.dumps(submit_payload), headers=headers)
+        response = self.session.post(self.SUBMIT_ORDER_URL, data=json.dumps(submit_payload), headers=headers)
 
         if response.status_code == 200 and response.json()['code'] == '200':
             print(f">>>>>>>>>>【{submit_payload['title']}】工单提交完成<<<<<<<<<<")
