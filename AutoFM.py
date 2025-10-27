@@ -247,8 +247,8 @@ class AutoZYT:
         ttfx_is_deal = False
 
         for order in self.fm_need_deal_list:
-            # 待验收的临时工单不用管
-            if order['status'] == '10':
+            # 待验收和临时工单不用管
+            if order['woType'] != 'PM':
                 continue
 
             for task_info in order['taskInfoVo']:

@@ -1,3 +1,5 @@
+import traceback
+
 from AutoFM import AutoZYT
 from Notification import Notify
 
@@ -11,7 +13,7 @@ def auto_grab_task():
         auto_zyt.grab_fm_task()
     except Exception as e:
         notify.send(f"运行出错: {repr(e)}")
-        print(f">>>>>>>>>>运行出错: {repr(e)}<<<<<<<<<<")
+        print(f">>>>>>>>>>运行出错: {traceback.print_exc()}<<<<<<<<<<")
         auto_grab_task()
 
 
