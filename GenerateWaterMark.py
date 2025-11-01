@@ -93,6 +93,11 @@ def add_watermark_to_image(original_image_path, name="梁振卓", user_number="2
     # 加载原图
     original_image = Image.open(original_image_path)
 
+    # 判断图片方向并旋转
+    if original_image.width > original_image.height:
+        # 横向图片，顺时针旋转90度
+        original_image = original_image.rotate(-90, expand=True)
+
     # 检查是否需要裁剪
     need_crop = check_need_crop(original_image.width, original_image.height)
 
