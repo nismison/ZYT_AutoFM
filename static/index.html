@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+    <title>图片瀑布流 - 分页版</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f5f5f5; }
+        img {
+            width: 100%;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: block;
+        }
+        img:hover { transform: scale(1.02); }
+
+        #gallery {
+            position: relative;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .item {
+            position: absolute;
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: opacity 0.3s;
+        }
+        .item.loading { opacity: 0; }
+        .item.loaded { opacity: 1; }
+
+        .image-container { position: relative; overflow: hidden; border-radius: 0.75rem 0.75rem 0 0; }
+        .image-info {
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            font-size: 0.75rem;
+            color: #6c757d;
+            text-align: left;
+        }
+        .image-info .filename {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #333;
+        }
+        .image-info .meta { display: flex; justify-content: space-between; }
+
+        .favorite-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(255,255,255,0.8);
+            border: none;
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .favorite-btn.favorited { color: #ff4757; }
+
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        .nav-tab {
+            padding: 0.5rem 1rem;
+            margin: 0 0.25rem;
+            background: #e2e8f0;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .nav-tab.active {
+            background: #4299e1;
+            color: white;
+        }
+
+        .loading-text { text-align: center; padding: 1rem; color: #666; }
+    </style>
+</head>
+<body class="p-4">
+<div id="app">
+    <!-- 顶部导航 -->
+    <div class="nav-tabs mb-4">
+        <div class="nav-tab" :class="{active: currentView === 'gallery'}" @click="switchView('gallery')">全部图片</div>
+        <div class="nav-tab" :class="{active: currentView === 'favorites'}" @click="switchView('favorites')">收藏夹</div>
+    </div>
+
+    <!-- 设备筛选 -->
+    <div class="flex justify-center mb-4 gap-2 flex-wrap" v-if="currentView === 'gallery'">
+        <select v-model="selectedDevice" @change="reloadData" class="border rounded px-2 py-1">
+            <option value="">全部设备</option>
+            <option v-for="dev in devices" :key="dev" :value="dev">{{ dev }}</option>
+        </select>
+    </div>
+
+    <!-- 图片区域 -->
+    <div id="gallery" :style="{height: galleryHeight + 'px'}">
+        <div v-for="(item, index) in records"
+             :key="item.id"
+             class="item"
+             :class="item.loaded ? 'loaded' : 'loading'"
+             :style="item.style">
+            <div class="image-container">
+                <button class="favorite-btn" :class="{favorited: item.favorite}" @click.stop="toggleFavorite(item)">
+                    {{ item.favorite ? '❤️' : '🖤' }}
+                </button>
+                <img :src="`${item.oss_url}?x-oss-process=image/resize,p_30`" @click="openViewer(index)" @load="onImageLoad(index, $event)">
+            </div>
+            <div class="image-info">
+                <div class="filename">{{ item.filename }}</div>
+                <div class="meta">
+                    <span>{{ formatFileSize(item.file_size) }}</span>
+                    <span>{{ formatDateTime(item.upload_time) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-text" v-if="loading">{{ loadingText }}</div>
+
+    <!-- 分页控制 -->
+    <div class="flex justify-center items-center gap-4 my-6" v-if="totalPages > 1">
+        <button @click="changePage(-1)" :disabled="page === 1"
+                class="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">上一页</button>
+
+        <span>第 {{ page }} / {{ totalPages }} 页</span>
+
+        <input v-model.number="jumpPage" type="number" min="1" :max="totalPages"
+               class="w-16 text-center border rounded py-1" placeholder="页码">
+        <button @click="goToPage" class="px-3 py-1 bg-blue-500 text-white rounded">跳转</button>
+
+        <button @click="changePage(1)" :disabled="page === totalPages"
+                class="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">下一页</button>
+    </div>
+</div>
+
+<script>
+new Vue({
+    el: '#app',
+    data: {
+        records: [],
+        devices: [],
+        selectedDevice: '',
+        page: 1,
+        totalPages: 1,
+        pageSize: 100,
+        jumpPage: '',
+        loading: false,
+        loadingText: '加载中...',
+        apiUrl: '/api/gallery',
+        columnCount: 2,
+        columnWidth: 0,
+        gap: 4,
+        columnHeights: [],
+        galleryHeight: 0,
+        currentView: 'gallery',
+        resizeTimer: null
+    },
+    mounted() {
+        this.initWaterfall();
+        this.loadData();
+        window.addEventListener('resize', this.handleResize);
+    },
+    methods: {
+        initWaterfall() {
+            const width = document.getElementById('gallery').offsetWidth;
+            if (width >= 1024) this.columnCount = 4;
+            else if (width >= 640) this.columnCount = 3;
+            else this.columnCount = 2;
+            this.columnWidth = (width - this.gap * (this.columnCount + 1)) / this.columnCount;
+            this.columnHeights = new Array(this.columnCount).fill(0);
+        },
+        async loadData() {
+            this.loading = true;
+            this.loadingText = '加载中...';
+            const params = { page: this.page, size: this.pageSize };
+            let url = this.currentView === 'favorites' ? '/api/favorites' : this.apiUrl;
+            if (this.currentView === 'gallery' && this.selectedDevice) params.device = this.selectedDevice;
+
+            try {
+                const res = await axios.get(url, { params });
+                if (res.data.success) {
+                    const data = res.data.data;
+                    this.records = data.records.map(r => ({ ...r, loaded: false, style: {} }));
+                    if (this.currentView === 'gallery') this.devices = data.devices || [];
+                    this.totalPages = data.total_pages || Math.ceil((data.total || 0) / this.pageSize);
+                    this.columnHeights = new Array(this.columnCount).fill(0);
+                    this.galleryHeight = 0;
+                } else {
+                    this.loadingText = '加载失败';
+                }
+            } catch (e) {
+                console.error(e);
+                this.loadingText = '加载失败';
+            } finally {
+                this.loading = false;
+            }
+        },
+        onImageLoad(index, e) {
+            const img = e.target;
+            const item = this.records[index];
+            if (!item) return;
+
+            const imgHeight = (img.naturalHeight / img.naturalWidth) * this.columnWidth;
+            const infoHeight = 50;
+            const totalHeight = imgHeight + infoHeight;
+            const minH = Math.min(...this.columnHeights);
+            const col = this.columnHeights.indexOf(minH);
+            const left = this.gap + col * (this.columnWidth + this.gap);
+            const top = this.columnHeights[col] + this.gap;
+
+            this.$set(item, 'style', {
+                left: left + 'px',
+                top: top + 'px',
+                width: this.columnWidth + 'px',
+                height: totalHeight + 'px'
+            });
+            this.columnHeights[col] += totalHeight + this.gap;
+            this.galleryHeight = Math.max(...this.columnHeights);
+            item.loaded = true;
+        },
+        changePage(delta) {
+            const newPage = this.page + delta;
+            if (newPage >= 1 && newPage <= this.totalPages) {
+                this.page = newPage;
+                this.loadData();
+                window.scrollTo(0, 0);
+            }
+        },
+        goToPage() {
+            if (!this.jumpPage || this.jumpPage < 1 || this.jumpPage > this.totalPages) {
+                alert('页码无效');
+                return;
+            }
+            this.page = this.jumpPage;
+            this.loadData();
+            window.scrollTo(0, 0);
+        },
+        reloadData() {
+            this.page = 1;
+            this.records = [];
+            this.initWaterfall();
+            this.loadData();
+        },
+        handleResize() {
+            clearTimeout(this.resizeTimer);
+            this.resizeTimer = setTimeout(() => this.reloadData(), 300);
+        },
+        async toggleFavorite(item) {
+            try {
+                const res = await axios.post(`/api/favorite/${item.id}`);
+                if (res.data.success) {
+                    item.favorite = res.data.favorite;
+                    if (this.currentView === 'favorites' && !item.favorite) this.reloadData();
+                }
+            } catch (err) {
+                alert('操作失败，请重试');
+            }
+        },
+        switchView(view) {
+            this.currentView = view;
+            this.reloadData();
+        },
+        openViewer(index) {
+            window.open(this.records[index].oss_url, '_blank');
+        },
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+        },
+        formatDateTime(str) {
+            const d = new Date(str);
+            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour12: false });
+        }
+    },
+    beforeDestroy() {
+        window.removeEventListener('resize', this.handleResize);
+    }
+});
+</script>
+</body>
+</html>

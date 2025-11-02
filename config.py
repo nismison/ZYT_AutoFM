@@ -1,0 +1,30 @@
+import os
+import logging.config
+
+# 基础 Token (从环境变量读取)
+BASIC_TOKEN = os.getenv("ZYT_TOKEN") or \
+              "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MjA2MjE0OCwiZXhwIjoxNzYyNjY2OTQ4fQ.RJZklvpDkWq_tLBCFDXl2sIz3tl4ul3lkDBYgk-Z8n8"
+
+FM_BASE_URL = "https://chuanplus-client.onewo.com/api/client"
+
+HEADERS_BASE = {
+    "Content-Type": "application/json",
+    "x-tenant": "10010",
+}
+
+LOGGING_CONFIG = {
+    'version': 1,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'INFO',  # 确保处理器级别是 INFO
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',  # 确保根日志器级别是 INFO
+    },
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger(__name__)

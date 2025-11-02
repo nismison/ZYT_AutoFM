@@ -28,6 +28,9 @@ six==1.17.0
 typing_extensions==4.13.2
 urllib3==2.2.3
 Werkzeug==3.0.6
+wxpusher==2.3.0
 zipp==3.20.2
 zope.event==5.0
 zope.interface==7.2
+
+peewee~=3.18.2

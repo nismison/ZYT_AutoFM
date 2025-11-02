@@ -1,2 +1,4 @@
 /venv/
-/TemplatePic/
+/uploads.db
+/uploads.db-shm
+/uploads.db-wal
