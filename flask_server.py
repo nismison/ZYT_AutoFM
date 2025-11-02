@@ -15,6 +15,7 @@ from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
 from fm_api import FMApi
 from oss_client import OSSClient
+from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,8 @@ db = PooledSqliteDatabase(
     check_same_thread=False,  # ✅ 关键参数
     pragmas={
         'journal_mode': 'wal',  # 启用WAL模式
-        'cache_size': -64000,   # 64MB缓存
-        'foreign_keys': 1,      # 启用外键
+        'cache_size': -64000,  # 64MB缓存
+        'foreign_keys': 1,  # 启用外键
         'ignore_check_constraints': 0,
         'synchronous': 'normal'
     }
@@ -418,6 +419,7 @@ def create_app():
 # Gunicorn 运行时会直接导入 `app` 对象
 init_database()
 app = create_app()
+CORS(app, resources=r'/*')
 
 # ==================== 开发模式启动 ====================
 if __name__ == '__main__':
