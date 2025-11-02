@@ -1,4 +1,3 @@
-import atexit
 import logging
 import os
 import tempfile
@@ -74,17 +73,6 @@ upload_executor = ThreadPoolExecutor(
     max_workers=MAX_UPLOAD_THREADS,
     thread_name_prefix='upload_worker'
 )
-
-
-# ==================== 应用关闭时优雅地关闭线程池 ====================
-def cleanup_executor():
-    """清理线程池"""
-    logging.info("[系统] 正在关闭上传线程池...")
-    upload_executor.shutdown(wait=True, cancel_futures=False)
-    logging.info("[系统] 上传线程池已关闭")
-
-
-atexit.register(cleanup_executor)
 
 
 # ==================== Flask 应用工厂 ====================
