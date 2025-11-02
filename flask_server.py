@@ -8,6 +8,7 @@ from math import ceil
 
 from flask import Flask, jsonify, request
 from peewee import *
+from playhouse.pool import PooledSqliteDatabase
 
 from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
@@ -17,15 +18,19 @@ from oss_client import OSSClient
 logger = logging.getLogger(__name__)
 
 # ==================== 数据库配置 ====================
-db = SqliteDatabase(
+# 使用连接池的数据库配置
+db = PooledSqliteDatabase(
     'uploads.db',
+    max_connections=20,
+    stale_timeout=300,
+    check_same_thread=False,  # ✅ 关键参数
     pragmas={
-        'journal_mode': 'wal',  # 支持并发读写
-        'cache_size': -1024 * 64,
-        'foreign_keys': 1,
-        'synchronous': 0
-    },
-    timeout=10
+        'journal_mode': 'wal',  # 启用WAL模式
+        'cache_size': -64000,   # 64MB缓存
+        'foreign_keys': 1,      # 启用外键
+        'ignore_check_constraints': 0,
+        'synchronous': 'normal'
+    }
 )
 
 notify = Notify()
