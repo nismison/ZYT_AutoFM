@@ -1,10 +1,8 @@
-import traceback
 import logging
+import traceback
 
-from fm_api import FMApi
-from oss_client import OSSClient
-from order_handler import OrderHandler
 from Notification import Notify
+from fm_api import FMApi
 
 notify = Notify()
 
@@ -13,8 +11,6 @@ def auto_grab_task():
     try:
         logging.info("开始初始化 FM API...")
         fm = FMApi()
-        oss = OSSClient(fm.session, fm.token)
-        handler = OrderHandler(fm, oss)
 
         logging.info("开始获取 FM 工单列表...")
         task_data = fm.get_task_list()
