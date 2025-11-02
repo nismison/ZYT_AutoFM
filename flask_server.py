@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from math import ceil
 
+from PIL import Image
 from flask import Flask, jsonify, request
 from peewee import *
 from playhouse.pool import PooledSqliteDatabase
@@ -51,6 +52,8 @@ class UploadRecord(BaseModel):
     original_filename = CharField(max_length=255, null=True)
     favorite = BooleanField(default=False)
     etag = CharField(max_length=32, null=True)
+    width = IntegerField()
+    height = IntegerField()
 
     class Meta:
         table_name = 'upload_records'
@@ -176,7 +179,7 @@ def create_app():
                     except Exception:
                         pass
 
-    def background_upload_task(file_path, filename, file_size, device_model, etag):
+    def background_upload_task(file_path, filename, file_size, device_model, etag, width, height):
         """后台上传任务"""
         try:
             logging.info(f"[后台任务] 开始上传文件: {filename}")
@@ -193,7 +196,9 @@ def create_app():
                     device_model=device_model,
                     original_filename=filename,
                     upload_time=datetime.now(),
-                    etag=etag
+                    etag=etag,
+                    width=width,
+                    height=height
                 )
                 logging.info(f"[后台任务] 数据库记录保存成功: {filename}")
             except Exception as e:
@@ -242,10 +247,14 @@ def create_app():
             # 获取文件大小
             file_size = os.path.getsize(temp_file_path)
 
+            img = Image.open(temp_file_path)
+            width = img.width  # 图片的宽
+            height = img.height  # 图片的高
+
             # 提交任务到线程池（如果队列满了会自动等待）
             future = upload_executor.submit(
                 background_upload_task,
-                temp_file_path, filename, file_size, device_model, etag
+                temp_file_path, filename, file_size, device_model, etag, width, height
             )
 
             # 立即返回成功响应
@@ -390,7 +399,9 @@ def create_app():
                         "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
                         "file_size": r.file_size,
                         "favorite": r.favorite,
-                        "etag": r.etag
+                        "etag": r.etag,
+                        "width": r.width,
+                        "height": r.height
                     } for r in records
                 ],
                 "page": page,
