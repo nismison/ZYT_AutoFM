@@ -344,6 +344,14 @@ def create_app():
         total_pages = max(ceil(total / size), 1)
         records = query.paginate(page, size)
 
+        devices = (
+            UploadRecord.select(UploadRecord.device_model)
+                .distinct()
+                .order_by(UploadRecord.device_model)
+                .tuples()
+        )
+        devices = [d[0] for d in devices if d[0]]
+
         return jsonify({
             "success": True,
             "data": {
@@ -356,12 +364,15 @@ def create_app():
                         "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
                         "file_size": r.file_size,
                         "favorite": r.favorite,
-                        "etag": r.etag  # 返回etag
+                        "etag": r.etag,
+                        "width": r.width,
+                        "height": r.height
                     } for r in records
                 ],
                 "page": page,
                 "total_pages": total_pages,
-                "total": total
+                "total": total,
+                "devices": devices
             }
         })
 
