@@ -120,7 +120,7 @@
                 <button class="favorite-btn" :class="{favorited: item.favorite}" @click.stop="toggleFavorite(item)">
                     {{ item.favorite ? '❤️' : '🖤' }}
                 </button>
-                <img :src="`${item.oss_url}?x-oss-process=image/resize,p_30`" @click="openViewer(index)" @load="onImageLoad(index, $event)">
+                <img :src="`${item.thumb}`" @click="openViewer(index)" @load="onImageLoad(index, $event)">
             </div>
             <div class="image-info">
                 <div class="filename">{{ item.filename }}</div>

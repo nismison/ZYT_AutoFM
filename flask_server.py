@@ -1,11 +1,10 @@
 import logging
 import os
-import platform
 import random
 import string
 import tempfile
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from math import ceil
 
 from PIL import Image
@@ -33,15 +32,15 @@ db = SqliteDatabase(
 notify = Notify()
 
 # ==================== 本地存储配置 ====================
-# 固定的base URL
-if platform.system() == 'Windows':
-    BASE_URL = "http://192.168.1.9:5001"
-else:
-    BASE_URL = "https://api.zytsy.icu"
+BASE_URL = "https://api.zytsy.icu"
 
 # 相册图片存储目录（持久保存）
 GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery')
 os.makedirs(GALLERY_STORAGE_DIR, exist_ok=True)
+
+# 缓存图片存储目录（持久保存）
+GALLERY_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery_cache')
+os.makedirs(GALLERY_CACHE_DIR, exist_ok=True)
 
 # 水印图片存储目录（定时清理）
 WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'watermark')
@@ -97,7 +96,7 @@ def generate_random_suffix(length=8):
 def get_image_url(image_id, image_type='gallery'):
     """
     生成图片外链URL
-    image_type: 'gallery' 或 'watermark'
+    image_type: 'gallery' 或 'watermark' 或 'gallery_cache'
     """
     return f"{BASE_URL}/api/image/{image_type}/{image_id}"
 
@@ -105,20 +104,20 @@ def get_image_url(image_id, image_type='gallery'):
 # ==================== Flask 应用工厂 ====================
 def create_app():
     """创建 Flask 应用"""
-    app = Flask(__name__)
+    flask_app = Flask(__name__)
     init_database_connection()
 
     # ==================== 请求前日志 ====================
-    @app.before_request
+    @flask_app.before_request
     def log_request_pid():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
-    @app.route('/gallery')
+    @flask_app.route('/gallery')
     def serve_vue():
-        return app.send_static_file('index.html')
+        return flask_app.send_static_file('index.html')
 
-    @app.route("/api/image/<image_type>/<image_id>")
+    @flask_app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
         """
         图片外链接口 - 根据image_type和image_id返回图片文件
@@ -130,6 +129,8 @@ def create_app():
                 storage_dir = GALLERY_STORAGE_DIR
             elif image_type == 'watermark':
                 storage_dir = WATERMARK_STORAGE_DIR
+            elif image_type == 'gallery_cache':
+                storage_dir = GALLERY_CACHE_DIR
             else:
                 return jsonify({"error": "无效的图片类型"}), 400
 
@@ -182,7 +183,7 @@ def create_app():
         else:
             return jsonify({"success": True, "uploaded": False})
 
-    @app.route("/upload_with_watermark", methods=["POST"])
+    @flask_app.route("/upload_with_watermark", methods=["POST"])
     def upload_with_watermark():
         """上传并添加水印 - 保存到水印目录"""
         original_path = None
@@ -191,7 +192,6 @@ def create_app():
             user_number = request.form.get('user_number')
             base_date = request.form.get('base_date')
             base_time = request.form.get('base_time')
-            etag = request.form.get('etag')
             file = request.files.get('file')
 
             if not all([name, user_number, file]):
@@ -243,7 +243,7 @@ def create_app():
                 except Exception:
                     pass
 
-    @app.route("/upload_to_gallery", methods=["POST"])
+    @flask_app.route("/upload_to_gallery", methods=["POST"])
     def upload_to_gallery():
         """上传到相册 - 保存到相册目录（持久保存）"""
         try:
@@ -261,6 +261,7 @@ def create_app():
             ext = os.path.splitext(filename)[1] or '.jpg'
             local_filename = f"{image_id}{ext}"
             save_path = os.path.join(GALLERY_STORAGE_DIR, local_filename)
+            thumb_path = os.path.join(GALLERY_CACHE_DIR, f"{image_id}_thumb{ext}")
 
             # 直接保存到相册存储目录
             file.save(save_path)
@@ -269,10 +270,13 @@ def create_app():
             file_size = os.path.getsize(save_path)
             img = Image.open(save_path)
             width, height = img.width, img.height
+            # 保存预览图
+            img.save(thumb_path, quality=50, optimize=True)
             img.close()
 
             # 生成图片外链URL
             oss_url = get_image_url(image_id, 'gallery')
+            thumb_url = get_image_url(image_id, 'gallery_cache')
 
             # 保存数据库记录
             UploadRecord.create(
@@ -283,7 +287,8 @@ def create_app():
                 upload_time=datetime.now(),
                 etag=etag,
                 width=width,
-                height=height
+                height=height,
+                thumb=thumb_url
             )
 
             logger.info(f"相册图片已保存: {filename} -> {oss_url}")
@@ -302,7 +307,7 @@ def create_app():
             traceback.print_exc()
             return jsonify({"success": False, "error": str(e)}), 500
 
-    @app.route("/send_notify", methods=["POST"])
+    @flask_app.route("/send_notify", methods=["POST"])
     def send_notify():
         data = request.get_json(silent=True) or {}
         content = data.get("content")
@@ -311,12 +316,7 @@ def create_app():
         notify.send(content)
         return jsonify({"success": True})
 
-    @app.route("/upload_policy", methods=["GET"])
-    def upload_policy():
-        """本地存储不需要policy,返回空对象"""
-        return jsonify({"success": True, "policy": {}})
-
-    @app.route("/api/favorite/<int:record_id>", methods=["POST"])
+    @flask_app.route("/api/favorite/<int:record_id>", methods=["POST"])
     def toggle_favorite(record_id):
         try:
             record = UploadRecord.get_by_id(record_id)
@@ -332,7 +332,7 @@ def create_app():
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
-    @app.route("/api/favorites", methods=["GET"])
+    @flask_app.route("/api/favorites", methods=["GET"])
     def get_favorites():
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
@@ -355,7 +355,8 @@ def create_app():
                     "favorite": r.favorite,
                     "etag": r.etag,
                     "width": r.width,
-                    "height": r.height
+                    "height": r.height,
+                    "thumb": r.thumb
                 } for r in records],
                 "page": page,
                 "total_pages": total_pages,
@@ -364,7 +365,7 @@ def create_app():
             }
         })
 
-    @app.route("/api/gallery", methods=["GET"])
+    @flask_app.route("/api/gallery", methods=["GET"])
     def api_gallery():
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
@@ -392,7 +393,8 @@ def create_app():
                     "favorite": r.favorite,
                     "etag": r.etag,
                     "width": r.width,
-                    "height": r.height
+                    "height": r.height,
+                    "thumb": r.thumb
                 } for r in records],
                 "page": page,
                 "total_pages": total_pages,
@@ -401,7 +403,7 @@ def create_app():
             }
         })
 
-    return app
+    return flask_app
 
 
 # ==================== 主程序入口 ====================
