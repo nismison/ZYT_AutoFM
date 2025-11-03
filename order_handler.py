@@ -197,8 +197,8 @@ class OrderHandler:
             self._process_order(order, rule)
         else:
             payload = rule['func'](order_id, *uploaded_urls)
-            # self.fm.submit_order(payload)
-            logger.info(f"提交工单: {json.dumps(payload)}")
+            self.fm.submit_order(payload)
+            # logger.info(f"提交工单: {json.dumps(payload)}")
             self.notify.send(f"工单【{title}】已完成")
 
             logger.info(f"工单【{title}】处理完成 ✅")
