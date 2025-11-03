@@ -1,16 +1,19 @@
+import hashlib
 import logging
 import os
 import random
 import string
 import tempfile
+import time
 import uuid
 from datetime import datetime
 from math import ceil
 
 from PIL import Image
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, make_response
 from flask_cors import CORS
 from peewee import *
+from werkzeug.http import http_date
 
 from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
@@ -120,11 +123,10 @@ def create_app():
     @app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
         """
-        图片外链接口 - 根据image_type和image_id返回图片文件
-        image_type: 'gallery' 或 'watermark'
+        图片外链接口 - 带浏览器缓存支持
         """
         try:
-            # 根据类型选择存储目录
+            # 选择目录
             if image_type == 'gallery':
                 storage_dir = GALLERY_STORAGE_DIR
             elif image_type == 'watermark':
@@ -136,28 +138,44 @@ def create_app():
 
             # 查找对应的文件
             files = os.listdir(storage_dir)
-            matching_file = None
-
-            for filename in files:
-                if filename.startswith(image_id):
-                    matching_file = filename
-                    break
-
+            matching_file = next((f for f in files if f.startswith(image_id)), None)
             if not matching_file:
                 return jsonify({"error": "图片不存在"}), 404
 
             image_path = os.path.join(storage_dir, matching_file)
-
             if not os.path.exists(image_path):
                 return jsonify({"error": "图片文件不存在"}), 404
 
-            # 返回图片文件
-            return send_file(
+            # ==== 🔒 缓存处理部分 ====
+
+            # 1. 生成 ETag（用文件修改时间和大小）
+            stat = os.stat(image_path)
+            etag = hashlib.md5(f"{stat.st_mtime}-{stat.st_size}".encode()).hexdigest()
+
+            # 2. 获取修改时间
+            last_modified = http_date(stat.st_mtime)
+
+            # 3. 判断客户端缓存是否有效
+            if request.headers.get("If-None-Match") == etag:
+                return "", 304
+            if request.headers.get("If-Modified-Since") == last_modified:
+                return "", 304
+
+            # ==== 🔄 返回文件并附带缓存头 ====
+            response = make_response(send_file(
                 image_path,
                 mimetype='image/jpeg',
                 as_attachment=False,
                 download_name=matching_file
-            )
+            ))
+
+            # 设置 HTTP 缓存头
+            response.headers["ETag"] = etag
+            response.headers["Last-Modified"] = last_modified
+            response.headers["Cache-Control"] = "public, max-age=2592000"  # 缓存30天
+            response.headers["Expires"] = http_date(time.time() + 2592000)
+
+            return response
 
         except Exception as e:
             logger.error(f"获取图片失败: {e}")
