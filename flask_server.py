@@ -5,38 +5,33 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from math import ceil
+from time import sleep
 
 from PIL import Image
 from flask import Flask, jsonify, request
 from peewee import *
-from playhouse.pool import PooledSqliteDatabase
+from flask_cors import CORS
 
 from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
 from fm_api import FMApi
 from oss_client import OSSClient
-from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
 
 # ==================== 数据库配置 ====================
-# 使用连接池的数据库配置
-db = PooledSqliteDatabase(
+db = SqliteDatabase(
     'uploads.db',
-    max_connections=20,
-    stale_timeout=300,
-    check_same_thread=False,  # ✅ 关键参数
     pragmas={
-        'journal_mode': 'wal',  # 启用WAL模式
-        'cache_size': -64000,  # 64MB缓存
-        'foreign_keys': 1,  # 启用外键
+        'journal_mode': 'wal',
+        'cache_size': -64000,
+        'foreign_keys': 1,
         'ignore_check_constraints': 0,
         'synchronous': 'normal'
     }
 )
 
 notify = Notify()
-
 
 # ==================== ORM 模型定义 ====================
 class BaseModel(Model):
@@ -58,45 +53,90 @@ class UploadRecord(BaseModel):
 
     class Meta:
         table_name = 'upload_records'
-        indexes = (
-            (('etag',), False),
-        )
+        indexes = ((('etag',), False),)
 
 
-# ==================== 初始化数据库 ====================
-def init_database():
+# ==================== 数据库初始化函数 ====================
+def init_database_connection():
+    """为当前进程建立数据库连接"""
     if db.is_closed():
         db.connect(reuse_if_open=True)
+        db.execute_sql("PRAGMA journal_mode=WAL;")
+        logger.info(f"[PID {os.getpid()}] 数据库连接已建立 (WAL 模式启用)")
+
+
+def ensure_tables():
+    """只在主进程中执行一次表结构检查"""
+    init_database_connection()
     db.create_tables([UploadRecord], safe=True)
-    db.execute_sql("PRAGMA journal_mode=WAL;")
-    logger.info("数据库初始化完成(WAL模式启用)")
+    logger.info("[主进程] 数据库表结构检查完成")
 
 
-# ==================== 创建持久化的上传目录 ====================
-UPLOAD_TEMP_DIR = os.path.join(os.path.dirname(__file__), 'upload_temp')
-os.makedirs(UPLOAD_TEMP_DIR, exist_ok=True)
-
-# ==================== 创建线程池，设置最大并发数 ====================
-MAX_UPLOAD_THREADS = 5  # 最多同时5个上传任务
+# ==================== 上传线程池 ====================
+MAX_UPLOAD_THREADS = 5
 upload_executor = ThreadPoolExecutor(
     max_workers=MAX_UPLOAD_THREADS,
     thread_name_prefix='upload_worker'
 )
 
+# ==================== 上传目录 ====================
+UPLOAD_TEMP_DIR = os.path.join(os.path.dirname(__file__), 'upload_temp')
+os.makedirs(UPLOAD_TEMP_DIR, exist_ok=True)
+
 
 # ==================== Flask 应用工厂 ====================
 def create_app():
-    """创建 Flask 应用（Gunicorn 可用）"""
+    """创建 Flask 应用（支持多进程 + 多线程）"""
     app = Flask(__name__)
+    init_database_connection()
 
-    # 初始化 FM + OSS 模块
-    fm = FMApi()
-    oss = OSSClient(fm.session, fm.token)
+    # 延迟初始化外部依赖（lazy load）
+    fm = None
+    oss = None
+
+    def get_fm():
+        nonlocal fm
+        if fm is None:
+            logger.info(f"[PID {os.getpid()}] 延迟初始化 FMApi...")
+            for i in range(3):  # 初始化重试
+                try:
+                    fm = FMApi()
+                    logger.info(f"[PID {os.getpid()}] FMApi 初始化成功")
+                    break
+                except Exception as e:
+                    logger.error(f"[PID {os.getpid()}] FMApi 初始化失败({i+1}/3): {e}")
+                    sleep(2)
+            if fm is None:
+                raise RuntimeError("FMApi 初始化失败")
+        return fm
+
+    def get_oss():
+        nonlocal oss
+        if oss is None:
+            fm_instance = get_fm()
+            logger.info(f"[PID {os.getpid()}] 延迟初始化 OSSClient...")
+            for i in range(3):
+                try:
+                    oss_instance = OSSClient(fm_instance.session, fm_instance.token)
+                    oss = oss_instance
+                    logger.info(f"[PID {os.getpid()}] OSSClient 初始化成功")
+                    break
+                except Exception as e:
+                    logger.error(f"[PID {os.getpid()}] OSSClient 初始化失败({i+1}/3): {e}")
+                    sleep(2)
+            if oss is None:
+                raise RuntimeError("OSSClient 初始化失败")
+        return oss
 
     # ==================== 内部工具 ====================
     def adjust_time_for_display(dt):
-        """UTC 时间转显示时间 (+8 小时)"""
+        """UTC 转本地时间 (+8小时)"""
         return dt + timedelta(hours=8)
+
+    # ==================== 请求前日志 ====================
+    @app.before_request
+    def log_request_pid():
+        logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
     @app.route('/gallery')
@@ -159,7 +199,7 @@ def create_app():
                 output_path=result_path
             )
 
-            oss_url = oss.upload(result_path)
+            oss_url = get_oss().upload(result_path)
 
             return jsonify({
                 "success": True,
@@ -183,13 +223,10 @@ def create_app():
     def background_upload_task(file_path, filename, file_size, device_model, etag, width, height):
         """后台上传任务"""
         try:
-            logging.info(f"[后台任务] 开始上传文件: {filename}")
+            logger.info(f"[后台任务] 开始上传文件: {filename}")
+            oss_url = get_oss().upload(file_path)
+            logger.info(f"[后台任务] OSS上传成功: {oss_url}")
 
-            # 上传到OSS
-            oss_url = oss.upload(file_path)
-            logging.info(f"[后台任务] OSS上传成功: {oss_url}")
-
-            # 保存数据库记录
             try:
                 UploadRecord.create(
                     oss_url=oss_url,
@@ -201,28 +238,23 @@ def create_app():
                     width=width,
                     height=height
                 )
-                logging.info(f"[后台任务] 数据库记录保存成功: {filename}")
+                logger.info(f"[后台任务] 数据库记录保存成功: {filename}")
             except Exception as e:
-                logging.error(f"[后台任务] 数据库保存失败: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[后台任务] 数据库保存失败: {e}")
 
             return {"success": True, "oss_url": oss_url, "filename": filename}
 
         except Exception as e:
-            logging.info(f"[后台任务] 上传失败: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"[后台任务] 上传失败: {e}")
             return {"success": False, "error": str(e)}
 
         finally:
-            # 清理临时文件
             if os.path.exists(file_path):
                 try:
                     os.remove(file_path)
-                    logging.info(f"[后台任务] 临时文件已清理: {file_path}")
+                    logger.info(f"[后台任务] 临时文件已清理: {file_path}")
                 except Exception as e:
-                    logging.error(f"[后台任务] 清理临时文件失败: {e}")
+                    logger.error(f"[后台任务] 清理临时文件失败: {e}")
 
     @app.route("/upload_to_gallery", methods=["POST"])
     def upload_to_gallery():
@@ -235,30 +267,20 @@ def create_app():
             if not all([file, device_model, etag]):
                 return jsonify({"error": "缺少必要参数(file, device_model, etag)"}), 400
 
-            # 获取文件信息
             filename = file.filename
-
-            # 生成唯一的文件名，避免冲突
             unique_filename = f"{uuid.uuid4().hex}_{filename}"
             temp_file_path = os.path.join(UPLOAD_TEMP_DIR, unique_filename)
-
-            # 保存文件到持久化临时目录
             file.save(temp_file_path)
 
-            # 获取文件大小
             file_size = os.path.getsize(temp_file_path)
-
             img = Image.open(temp_file_path)
-            width = img.width  # 图片的宽
-            height = img.height  # 图片的高
+            width, height = img.width, img.height
 
-            # 提交任务到线程池（如果队列满了会自动等待）
-            future = upload_executor.submit(
+            upload_executor.submit(
                 background_upload_task,
                 temp_file_path, filename, file_size, device_model, etag, width, height
             )
 
-            # 立即返回成功响应
             return jsonify({
                 "success": True,
                 "message": "文件已接收，正在后台上传",
@@ -274,7 +296,6 @@ def create_app():
 
     @app.route("/send_notify", methods=["POST"])
     def send_notify():
-        """手动触发推送通知"""
         data = request.get_json(silent=True) or {}
         content = data.get("content")
         if not content:
@@ -284,28 +305,15 @@ def create_app():
 
     @app.route("/upload_policy", methods=["GET"])
     def upload_policy():
-        """
-        获取上传策略
-        :return: OSS上传策略
-        """
-        policy = oss.get_oss_policy()
-        return jsonify({
-            "success": True,
-            "oss_policy": policy
-        })
+        policy = get_oss().get_oss_policy()
+        return jsonify({"success": True, "oss_policy": policy})
 
     @app.route("/api/favorite/<int:record_id>", methods=["POST"])
     def toggle_favorite(record_id):
-        """
-        切换记录的收藏状态
-        :param record_id: 记录ID
-        :return: 更新后的收藏状态
-        """
         try:
             record = UploadRecord.get_by_id(record_id)
             record.favorite = not record.favorite
             record.save()
-
             return jsonify({
                 "success": True,
                 "favorite": record.favorite,
@@ -318,57 +326,29 @@ def create_app():
 
     @app.route("/api/favorites", methods=["GET"])
     def get_favorites():
-        """
-        获取收藏的图片记录(支持分页)
-        参数:
-            page: 页码,默认1
-            size: 每页数量,默认20
-        返回:
-            {
-                "success": true,
-                "data": {
-                    "records": [...],
-                    "page": 1,
-                    "total_pages": 3,
-                    "total": 56
-                }
-            }
-        """
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
-
-        # 查询收藏的记录
         query = UploadRecord.select().where(UploadRecord.favorite == True).order_by(UploadRecord.upload_time.desc())
-
         total = query.count()
         total_pages = max(ceil(total / size), 1)
         records = query.paginate(page, size)
-
-        devices = (
-            UploadRecord.select(UploadRecord.device_model)
-                .distinct()
-                .order_by(UploadRecord.device_model)
-                .tuples()
-        )
-        devices = [d[0] for d in devices if d[0]]
+        devices = [d[0] for d in UploadRecord.select(UploadRecord.device_model).distinct().tuples() if d[0]]
 
         return jsonify({
             "success": True,
             "data": {
-                "records": [
-                    {
-                        "id": r.id,
-                        "oss_url": r.oss_url,
-                        "filename": r.original_filename,
-                        "device_model": r.device_model,
-                        "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
-                        "file_size": r.file_size,
-                        "favorite": r.favorite,
-                        "etag": r.etag,
-                        "width": r.width,
-                        "height": r.height
-                    } for r in records
-                ],
+                "records": [{
+                    "id": r.id,
+                    "oss_url": r.oss_url,
+                    "filename": r.original_filename,
+                    "device_model": r.device_model,
+                    "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
+                    "file_size": r.file_size,
+                    "favorite": r.favorite,
+                    "etag": r.etag,
+                    "width": r.width,
+                    "height": r.height
+                } for r in records],
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
@@ -378,7 +358,6 @@ def create_app():
 
     @app.route("/api/gallery", methods=["GET"])
     def api_gallery():
-        """分页获取图片记录"""
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
         device = request.args.get("device", "").strip()
@@ -390,32 +369,23 @@ def create_app():
         total = query.count()
         total_pages = max(ceil(total / size), 1)
         records = query.paginate(page, size)
-
-        devices = (
-            UploadRecord.select(UploadRecord.device_model)
-                .distinct()
-                .order_by(UploadRecord.device_model)
-                .tuples()
-        )
-        devices = [d[0] for d in devices if d[0]]
+        devices = [d[0] for d in UploadRecord.select(UploadRecord.device_model).distinct().tuples() if d[0]]
 
         return jsonify({
             "success": True,
             "data": {
-                "records": [
-                    {
-                        "id": r.id,
-                        "oss_url": r.oss_url,
-                        "filename": r.original_filename,
-                        "device_model": r.device_model,
-                        "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
-                        "file_size": r.file_size,
-                        "favorite": r.favorite,
-                        "etag": r.etag,
-                        "width": r.width,
-                        "height": r.height
-                    } for r in records
-                ],
+                "records": [{
+                    "id": r.id,
+                    "oss_url": r.oss_url,
+                    "filename": r.original_filename,
+                    "device_model": r.device_model,
+                    "upload_time": adjust_time_for_display(r.upload_time).strftime("%Y-%m-%d %H:%M:%S"),
+                    "file_size": r.file_size,
+                    "favorite": r.favorite,
+                    "etag": r.etag,
+                    "width": r.width,
+                    "height": r.height
+                } for r in records],
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
@@ -426,12 +396,12 @@ def create_app():
     return app
 
 
-# ==================== Gunicorn 兼容 ====================
-# Gunicorn 运行时会直接导入 `app` 对象
-init_database()
+# ==================== 主程序入口 ====================
+if os.getpid() == os.getppid():
+    ensure_tables()
+
 app = create_app()
 CORS(app, resources=r'/*')
 
-# ==================== 开发模式启动 ====================
 if __name__ == '__main__':
     app.run(host="192.168.1.9", port=5001, debug=True)

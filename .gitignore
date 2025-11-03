@@ -3,3 +3,8 @@
 /uploads.db-shm
 /uploads.db-wal
 /.idea/
+/__pycache__/
+/.htaccess
+/gunicorn.pid
+/gunicorn_conf.py
+/uwsgi.ini
