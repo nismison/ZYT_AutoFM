@@ -39,8 +39,11 @@ loglevel = 'info'
 # =========================================================
 # 🔧 自定义启动钩子：Gunicorn Master 启动时自动拉取最新代码
 # =========================================================
+import logging
 import subprocess
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def on_starting(server):
@@ -51,7 +54,7 @@ def on_starting(server):
     repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
     cmd = f"cd {repo_path} && git pull"
 
-    print("🚀 Gunicorn Master 启动中：正在检测并拉取最新代码 ...")
+    logger.info("🚀 Gunicorn Master 启动中：正在检测并拉取最新代码 ...")
 
     try:
         result = subprocess.run(
@@ -66,15 +69,15 @@ def on_starting(server):
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            print("❌ Git 拉取失败：")
-            print(stderr or stdout)
+            logger.error("❌ Git 拉取失败：")
+            logger.info(stderr or stdout)
         else:
             if "Already up to date" in stdout or "已经是最新的" in stdout:
-                print("✅ 代码已是最新，无需更新")
+                logger.info("✅ 代码已是最新，无需更新")
             else:
-                print("✅ Git 拉取成功：")
-                print(stdout)
+                logger.info("✅ Git 拉取成功：")
+                logger.info(stdout)
     except subprocess.TimeoutExpired:
-        print("⚠️ Git 拉取超时，跳过更新")
+        logger.error("⚠️ Git 拉取超时，跳过更新")
     except Exception as e:
-        print("❌ 拉取更新时出现异常：", e)
+        logger.error("❌ 拉取更新时出现异常：", e)
