@@ -12,7 +12,6 @@ from PIL import Image
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from peewee import *
-from playhouse.migrate import SqliteMigrator, migrate
 
 from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
@@ -86,10 +85,6 @@ def ensure_tables():
     """只在主进程中执行一次表结构检查"""
     init_database_connection()
     db.create_tables([UploadRecord], safe=True)
-    migrator = SqliteMigrator(db)
-    migrate(
-        migrator.add_column('upload_records', 'thumb', CharField(max_length=500, null=True))
-    )
     logger.info("[主进程] 数据库表结构检查完成")
 
 
