@@ -178,10 +178,10 @@ class OrderHandler:
             try:
                 url = self.oss.upload(path)
                 uploaded_urls.append(url)
-                logger.info(f"上传成功: {path} -> {url}")
+                logger.info(f"上传成功: {url}")
 
             except Exception as e:
-                logger.error(f"上传失败: {path}, 错误: {e}")
+                logger.error(f"上传失败: {e}")
 
         # 5️⃣ 清理临时文件
         for path in image_paths:
@@ -198,7 +198,7 @@ class OrderHandler:
         else:
             payload = rule['func'](order_id, *uploaded_urls)
             self.fm.submit_order(payload)
-            # logger.info(f"提交工单: {json.dumps(payload)}")
+            logger.info(f"提交工单: {json.dumps(payload)}")
             self.notify.send(f"工单【{title}】已完成")
 
             logger.info(f"工单【{title}】处理完成 ✅")

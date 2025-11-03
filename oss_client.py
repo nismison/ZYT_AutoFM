@@ -115,7 +115,7 @@ class OSSClient:
         upload_url = f"{self.oss['uploadUrl']}/{upload_key}"
 
         logger.info(f"开始上传文件: {file_path}")
-        logger.info(f"上传URL: {upload_url}")
+        logger.debug(f"上传URL: {upload_url}")
         logger.debug(f"Authorization: {authorization}")
 
         try:
