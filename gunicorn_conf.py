@@ -1,3 +1,5 @@
+import subprocess
+
 # 项目目录
 chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
@@ -31,6 +33,7 @@ errorlog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log'
 # critical:严重错误消息；
 loglevel = 'info'
 
+
 # 自定义设置项请写到该处
 # 最好以上面相同的格式 <注释 + 换行 + key = value> 进行书写， 
 # PS: gunicorn 的配置文件是python扩展形式，即".py"文件，需要注意遵从python语法，
@@ -39,11 +42,6 @@ loglevel = 'info'
 # =========================================================
 # 🔧 自定义启动钩子：Gunicorn Master 启动时自动拉取最新代码
 # =========================================================
-import logging
-import subprocess
-import os
-
-logger = logging.getLogger(__name__)
 
 
 def on_starting(server):
@@ -54,7 +52,7 @@ def on_starting(server):
     repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
     cmd = f"cd {repo_path} && git pull"
 
-    logger.info("🚀 Gunicorn Master 启动中：正在检测并拉取最新代码 ...")
+    server.log.info("🚀 Gunicorn Master 启动中：正在检测并拉取最新代码 ...")
 
     try:
         result = subprocess.run(
@@ -69,15 +67,15 @@ def on_starting(server):
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            logger.error("❌ Git 拉取失败：")
-            logger.info(stderr or stdout)
+            server.log.error("❌ Git 拉取失败：")
+            server.log.info(stderr or stdout)
         else:
             if "Already up to date" in stdout or "已经是最新的" in stdout:
-                logger.info("✅ 代码已是最新，无需更新")
+                server.log.info("✅ 代码已是最新，无需更新")
             else:
-                logger.info("✅ Git 拉取成功：")
-                logger.info(stdout)
+                server.log.info("✅ Git 拉取成功：")
+                server.log.info(stdout)
     except subprocess.TimeoutExpired:
-        logger.error("⚠️ Git 拉取超时，跳过更新")
+        server.log.error("⚠️ Git 拉取超时，跳过更新")
     except Exception as e:
-        logger.error("❌ 拉取更新时出现异常：", e)
+        server.log.error("❌ 拉取更新时出现异常：", e)
