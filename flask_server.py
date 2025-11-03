@@ -33,6 +33,7 @@ db = SqliteDatabase(
 
 notify = Notify()
 
+
 # ==================== ORM 模型定义 ====================
 class BaseModel(Model):
     class Meta:
@@ -104,7 +105,7 @@ def create_app():
                     logger.info(f"[PID {os.getpid()}] FMApi 初始化成功")
                     break
                 except Exception as e:
-                    logger.error(f"[PID {os.getpid()}] FMApi 初始化失败({i+1}/3): {e}")
+                    logger.error(f"[PID {os.getpid()}] FMApi 初始化失败({i + 1}/3): {e}")
                     sleep(2)
             if fm is None:
                 raise RuntimeError("FMApi 初始化失败")
@@ -122,7 +123,7 @@ def create_app():
                     logger.info(f"[PID {os.getpid()}] OSSClient 初始化成功")
                     break
                 except Exception as e:
-                    logger.error(f"[PID {os.getpid()}] OSSClient 初始化失败({i+1}/3): {e}")
+                    logger.error(f"[PID {os.getpid()}] OSSClient 初始化失败({i + 1}/3): {e}")
                     sleep(2)
             if oss is None:
                 raise RuntimeError("OSSClient 初始化失败")
@@ -204,7 +205,8 @@ def create_app():
             return jsonify({
                 "success": True,
                 "oss_url": oss_url,
-                "etag": etag
+                "etag": etag,
+                "oss_policy": {}
             })
 
         except Exception as e:
