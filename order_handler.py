@@ -42,51 +42,61 @@ def remove_duplicate_titles(order_list):
     return unique_orders
 
 
+# 上午
+# 消防通道门日巡查 -> 10:10 ~ 10:15
+# 消防设施月巡检 -> 10:16 ~ 10:27
+# 四乱二扰日巡检（白） -> 10:28 ~ 10:33
+# 公共区域风险隐患排查日巡检工单 -> 10:34 ~ 10:39
+# 门岗BI&5S日巡检 -> 10:40 ~ 10:45
+# 外来人员清场日巡查工单 -> 10:46 ~ 10:48
+
+# 下午
+# 消防通道门日巡查 -> 14:10 ~ 14:15
+# 消防设施月巡检 -> 14:16 ~ 14:27
+
 # ====== 工单模板配置 ======
 ORDER_RULES = {
     "消防通道门日巡查": {
         "template": "XFTD",
         "func": order_template_XFTD,
         "image_count": 2,
-        # 上午 (<12) → 10:20~10:30，下午 (>=12) → 14:40~14:50
         "time_func": lambda: generate_default_times(
-            10, [(20, 25), (25, 30)]
+            10, [(10, 12), (13, 15)]
         ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(40, 45), (45, 50)]
+            14, [(10, 12), (13, 15)]
         )
     },
     "消防设施月巡检": {
         "template": "XFSS",
         "func": order_template_XFSS,
         "image_count": 4,
-        # 上午 (<12) → 11:10~11:22，下午 (>=12) → 14:28~14:40
         "time_func": lambda: generate_default_times(
-            11, [(10, 13), (13, 16), (16, 19), (19, 22)]
+            11, [(16, 18), (19, 21), (22, 24), (25, 27)]
         ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(28, 31), (31, 34), (34, 37), (37, 40)]
+            14, [(16, 18), (19, 21), (22, 24), (25, 27)]
         )
     },
     "四乱二扰日巡检（白）": {
         "template": "4L2R",
-        "times": generate_default_times(10, [(10, 15), (15, 20)]),
+        "times": generate_default_times(10, [(28, 30), (31, 33)]),
         "func": order_template_4L2R,
         "image_count": 2
     },
     "公共区域风险隐患排查日巡检工单": {
         "template": "GGQY",
-        "times": generate_default_times(10, [(30, 35), (35, 40)]),
+        "times": generate_default_times(10, [(34, 36), (37, 39)]),
         "func": order_template_GGQY,
         "image_count": 2
     },
     "门岗BI&5S日巡检": {
         "template": "5S",
-        "times": generate_default_times(10, [(40, 45), (45, 50)]),
+        "times": generate_default_times(10, [(40, 42), (43, 45)]),
         "func": order_template_5S,
         "image_count": 2
     },
     "外来人员清场日巡查工单": {
         "template": "QC",
-        "times": generate_default_times(10, [(50, 59)]),
+        "times": generate_default_times(10, [(46, 48)]),
         "func": order_template_QC,
         "image_count": 1
     },
