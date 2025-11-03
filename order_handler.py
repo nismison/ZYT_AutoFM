@@ -3,13 +3,14 @@ import json
 import logging
 import os
 import random
+import re
 import tempfile
 import uuid
 
 from GenerateWaterMark import add_watermark_to_image
 from Notification import Notify
 from OrderTemplate import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
-    order_template_QC, order_template_XFSS
+    order_template_QC, order_template_XFSS, order_template_DYL
 from Utils import Utils
 
 logger = logging.getLogger(__name__)
@@ -42,17 +43,19 @@ def remove_duplicate_titles(order_list):
     return unique_orders
 
 
-# 上午
+# 上午 -> 11:30 执行
 # 消防通道门日巡查 -> 10:10 ~ 10:15
 # 消防设施月巡检 -> 10:16 ~ 10:27
 # 四乱二扰日巡检（白） -> 10:28 ~ 10:33
 # 公共区域风险隐患排查日巡检工单 -> 10:34 ~ 10:39
 # 门岗BI&5S日巡检 -> 10:40 ~ 10:45
 # 外来人员清场日巡查工单 -> 10:46 ~ 10:48
+# 单元楼栋月巡检 -> 10:49 ~ 10:57
 
-# 下午
+# 下午 -> 16:00 执行
 # 消防通道门日巡查 -> 14:10 ~ 14:15
 # 消防设施月巡检 -> 14:16 ~ 14:27
+# 单元楼栋月巡检 -> 14:28 ~ 14:36
 
 # ====== 工单模板配置 ======
 ORDER_RULES = {
@@ -71,7 +74,7 @@ ORDER_RULES = {
         "func": order_template_XFSS,
         "image_count": 4,
         "time_func": lambda: generate_default_times(
-            11, [(16, 18), (19, 21), (22, 24), (25, 27)]
+            10, [(16, 18), (19, 21), (22, 24), (25, 27)]
         ) if datetime.datetime.now().hour < 12 else generate_default_times(
             14, [(16, 18), (19, 21), (22, 24), (25, 27)]
         )
@@ -100,6 +103,16 @@ ORDER_RULES = {
         "func": order_template_QC,
         "image_count": 1
     },
+    "单元楼栋月巡检": {
+        "template": "DYL",
+        "func": order_template_DYL,
+        "image_count": 3,
+        "time_func": lambda: generate_default_times(
+            10, [(49, 51), (52, 54), (55, 57)]
+        ) if datetime.datetime.now().hour < 12 else generate_default_times(
+            14, [(28, 30), (31, 33), (34, 36)]
+        )
+    }
 }
 
 
@@ -144,9 +157,16 @@ class OrderHandler:
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
             tmp_path = os.path.join(self.tmp_dir, tmp_filename)
 
+            template_path = rule['template']
+
+            if order['title'] == "单元楼栋月巡检":
+                # 如果订单包含位置信息，则使用位置子目录
+                matches = re.findall(r'[a-zA-Z]\d+', order["address"])
+                template_path = f"{rule['template']}/{matches[0]}"
+
             # 执行水印生成
             add_watermark_to_image(
-                original_image_path=self.utils.get_random_template_file(f"{rule['template']}/{i + 1}"),
+                original_image_path=self.utils.get_random_template_file(template_path, str(i + 1)),
                 base_time=f"{hour}:{minute}",
                 output_path=tmp_path
             )
@@ -177,8 +197,8 @@ class OrderHandler:
             self._process_order(order, rule)
         else:
             payload = rule['func'](order_id, *uploaded_urls)
-            self.fm.submit_order(payload)
-            # logger.info(f"提交工单: {payload}")
+            # self.fm.submit_order(payload)
+            logger.info(f"提交工单: {json.dumps(payload)}")
             self.notify.send(f"工单【{title}】已完成")
 
             logger.info(f"工单【{title}】处理完成 ✅")

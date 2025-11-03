@@ -293,6 +293,102 @@ def order_template_XFSS(order_id, marked_image1, marked_image2, marked_image3, m
     }
 
 
+# 单元楼月巡检
+def order_template_DYL(order_id, marked_image1, marked_image2, marked_image3):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "正常"
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "4",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "5",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "6",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "7",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "8",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "9",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "10",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "正常"
+                },
+                {
+                    "stepNo": "11",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "12",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "13",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "正常"
+                },
+                {
+                    "stepNo": "14",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "15",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "16",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image2
+                },
+                {
+                    "stepNo": "17",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image3
+                }
+            ]
+        }
+    }
+
+
 # 天台风险月巡查 workResult
 def order_template_TTFX(objCodes: list, wrids: list, marked_image1: str, marked_image2: str, marked_image3: str):
     return [
