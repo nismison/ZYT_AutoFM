@@ -1,3 +1,4 @@
+import datetime
 import subprocess
 
 # 项目目录
@@ -35,7 +36,7 @@ loglevel = 'info'
 
 
 # 自定义设置项请写到该处
-# 最好以上面相同的格式 <注释 + 换行 + key = value> 进行书写， 
+# 最好以上面相同的格式 <注释 + 换行 + key = value> 进行书写，
 # PS: gunicorn 的配置文件是python扩展形式，即".py"文件，需要注意遵从python语法，
 # 如：loglevel的等级是字符串作为配置的，需要用引号包裹起来
 
@@ -46,13 +47,28 @@ loglevel = 'info'
 
 def on_starting(server):
     """
-    仅在 Gunicorn master 启动时执行（不会在每个 worker 执行），
-    用于自动拉取最新代码。
+    仅在 Gunicorn master 启动时执行一次，
+    拉取最新代码并把日志写入 errorlog 文件。
     """
     repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
     cmd = f"cd {repo_path} && git pull"
 
-    server.log.info("🚀 Gunicorn Master 启动中：正在检测并拉取最新代码 ...")
+    # 获取 gunicorn_conf.py 中定义的 errorlog 路径
+    log_path = globals().get("errorlog", "/tmp/git_pull_fallback.log")
+
+    def append_log(message: str):
+        """向 errorlog 追加日志行"""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{timestamp}] [GIT_PULL] {message}\n"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as e:
+            # 如果写入失败，写到系统临时目录兜底
+            with open("/tmp/git_pull_fallback.log", "a", encoding="utf-8") as f:
+                f.write(f"{line} (fallback due to error: {e})\n")
+
+    append_log("🚀 Gunicorn Master 启动中：开始检测并拉取最新代码 ...")
 
     try:
         result = subprocess.run(
@@ -67,15 +83,14 @@ def on_starting(server):
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            server.log.error("❌ Git 拉取失败：")
-            server.log.info(stderr or stdout)
+            append_log(f"❌ Git 拉取失败：{stderr or stdout}")
         else:
             if "Already up to date" in stdout or "已经是最新的" in stdout:
-                server.log.info("✅ 代码已是最新，无需更新")
+                append_log("✅ 代码已是最新，无需更新")
             else:
-                server.log.info("✅ Git 拉取成功：")
-                server.log.info(stdout)
+                append_log("✅ Git 拉取成功：")
+                append_log(stdout)
     except subprocess.TimeoutExpired:
-        server.log.error("⚠️ Git 拉取超时，跳过更新")
+        append_log("⚠️ Git 拉取超时，跳过更新")
     except Exception as e:
-        server.log.error("❌ 拉取更新时出现异常：", e)
+        append_log(f"❌ 拉取更新时出现异常：{e}")
