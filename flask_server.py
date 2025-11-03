@@ -202,6 +202,11 @@ def create_app():
                 file.save(tmp.name)
                 original_path = tmp.name
 
+                # 压缩图片
+                img = Image.open(tmp.name)
+                img.save(original_path, quality=80, optimize=True)
+                img.close()
+
             # 生成唯一的文件名（添加随机后缀避免重复）
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             random_suffix = generate_random_suffix()
