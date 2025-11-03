@@ -7,3 +7,5 @@
 /.htaccess
 /gunicorn.pid
 /uwsgi.ini
+/storage/
+/upload_temp/
