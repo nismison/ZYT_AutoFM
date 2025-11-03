@@ -104,20 +104,20 @@ def get_image_url(image_id, image_type='gallery'):
 # ==================== Flask 应用工厂 ====================
 def create_app():
     """创建 Flask 应用"""
-    flask_app = Flask(__name__)
+    app = Flask(__name__)
     init_database_connection()
 
     # ==================== 请求前日志 ====================
-    @flask_app.before_request
+    @app.before_request
     def log_request_pid():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
-    @flask_app.route('/gallery')
+    @app.route('/gallery')
     def serve_vue():
-        return flask_app.send_static_file('index.html')
+        return app.send_static_file('index.html')
 
-    @flask_app.route("/api/image/<image_type>/<image_id>")
+    @app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
         """
         图片外链接口 - 根据image_type和image_id返回图片文件
@@ -183,7 +183,7 @@ def create_app():
         else:
             return jsonify({"success": True, "uploaded": False})
 
-    @flask_app.route("/upload_with_watermark", methods=["POST"])
+    @app.route("/upload_with_watermark", methods=["POST"])
     def upload_with_watermark():
         """上传并添加水印 - 保存到水印目录"""
         original_path = None
@@ -243,7 +243,7 @@ def create_app():
                 except Exception:
                     pass
 
-    @flask_app.route("/upload_to_gallery", methods=["POST"])
+    @app.route("/upload_to_gallery", methods=["POST"])
     def upload_to_gallery():
         """上传到相册 - 保存到相册目录（持久保存）"""
         try:
@@ -307,7 +307,7 @@ def create_app():
             traceback.print_exc()
             return jsonify({"success": False, "error": str(e)}), 500
 
-    @flask_app.route("/send_notify", methods=["POST"])
+    @app.route("/send_notify", methods=["POST"])
     def send_notify():
         data = request.get_json(silent=True) or {}
         content = data.get("content")
@@ -316,7 +316,7 @@ def create_app():
         notify.send(content)
         return jsonify({"success": True})
 
-    @flask_app.route("/api/favorite/<int:record_id>", methods=["POST"])
+    @app.route("/api/favorite/<int:record_id>", methods=["POST"])
     def toggle_favorite(record_id):
         try:
             record = UploadRecord.get_by_id(record_id)
@@ -332,7 +332,7 @@ def create_app():
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
-    @flask_app.route("/api/favorites", methods=["GET"])
+    @app.route("/api/favorites", methods=["GET"])
     def get_favorites():
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
@@ -365,7 +365,7 @@ def create_app():
             }
         })
 
-    @flask_app.route("/api/gallery", methods=["GET"])
+    @app.route("/api/gallery", methods=["GET"])
     def api_gallery():
         page = int(request.args.get("page", 1))
         size = int(request.args.get("size", 20))
@@ -403,7 +403,7 @@ def create_app():
             }
         })
 
-    return flask_app
+    return app
 
 
 # ==================== 主程序入口 ====================
