@@ -163,6 +163,7 @@ new Vue({
         jumpPage: '',
         loading: false,
         loadingText: '加载中...',
+        apiBaseUrl: 'https://api.zytsy.icu',
         apiUrl: '/api/gallery',
         columnCount: 2,
         columnWidth: 0,
@@ -194,7 +195,7 @@ new Vue({
             if (this.currentView === 'gallery' && this.selectedDevice) params.device = this.selectedDevice;
 
             try {
-                const res = await axios.get(url, { params });
+                const res = await axios.get(this.apiBaseUrl + url, { params });
                 if (res.data.success) {
                     const data = res.data.data;
                     this.records = data.records.map(r => ({ ...r, loaded: false, style: {} }));
@@ -264,7 +265,7 @@ new Vue({
         },
         async toggleFavorite(item) {
             try {
-                const res = await axios.post(`/api/favorite/${item.id}`);
+                const res = await axios.post(this.apiBaseUrl + `/api/favorite/${item.id}`);
                 if (res.data.success) {
                     item.favorite = res.data.favorite;
                     if (this.currentView === 'favorites' && !item.favorite) this.reloadData();
