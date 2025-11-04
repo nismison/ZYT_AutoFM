@@ -1,5 +1,4 @@
 import hashlib
-import logging
 import os
 import random
 import string
@@ -15,9 +14,9 @@ from flask_cors import CORS
 from peewee import *
 from werkzeug.http import http_date
 
+from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL
 from generate_water_mark import add_watermark_to_image
 from notification import Notify
-from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL
 
 # ==================== 数据库配置 ====================
 db = SqliteDatabase(
