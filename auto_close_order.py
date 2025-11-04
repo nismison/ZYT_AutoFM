@@ -33,7 +33,7 @@ def auto_submit_task():
         day = str('{:0>2d}'.format(today.day))
 
         deal_data = fm.get_need_deal_list()
-        records = deal_data.get("records", []).filter(lambda x: x['woType'] == 'PM' and x['endDealTime'][:10] == f'2025-{month}-{day}')
+        records = [r for r in deal_data.get("records", []) if r['woType'] == 'PM' and r['endDealTime'][:10] == f'2025-{month}-{day}']
 
         msg = f"自动提交工单任务完成，剩余 {len(records)} 条"
         logging.info(msg)
@@ -43,7 +43,6 @@ def auto_submit_task():
         notify.send(f"自动提交运行出错: {repr(e)}")
         print(f">>>>>>>>>>运行出错<<<<<<<<<<")
         traceback.print_exc()
-        auto_submit_task()  # 保留递归重试逻辑
 
 
 if __name__ == '__main__':
