@@ -63,7 +63,7 @@ def draw_rounded_rectangle(draw, x, y, width, height, radius, fill, alpha=128):
 
 
 def add_watermark_to_image(original_image_path, name="梁振卓", user_number="2409840", base_date=None, base_time=None,
-                           output_path="output_watermarked.jpg",
+                           output_path=None,
                            minute_offset=0):
     """
     给单张图片添加水印

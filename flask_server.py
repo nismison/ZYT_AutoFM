@@ -104,10 +104,6 @@ def create_app():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
-    @app.route('/gallery')
-    def serve_vue():
-        return app.send_static_file('index.html')
-
     @app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
         """
