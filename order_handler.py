@@ -7,11 +7,11 @@ import re
 import tempfile
 import uuid
 
-from GenerateWaterMark import add_watermark_to_image
-from Notification import Notify
-from OrderTemplate import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
+from generate_water_mark import add_watermark_to_image
+from notification import Notify
+from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_XFSS, order_template_DYL
-from Utils import Utils
+from utils import Utils
 
 logger = logging.getLogger(__name__)
 

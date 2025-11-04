@@ -1,10 +1,11 @@
 import traceback
 import logging
+from datetime import datetime
 
 from fm_api import FMApi
 from oss_client import OSSClient
 from order_handler import OrderHandler
-from Notification import Notify
+from notification import Notify
 
 notify = Notify()
 
@@ -26,7 +27,15 @@ def auto_submit_task():
 
         handler.handle_all_orders(records)
 
-        msg = f"自动提交工单任务完成，共处理 {len(records)} 条"
+        # 处理完毕重新查看剩余工单
+        today = datetime.today()
+        month = str('{:0>2d}'.format(today.month))
+        day = str('{:0>2d}'.format(today.day))
+
+        deal_data = fm.get_need_deal_list()
+        records = deal_data.get("records", []).filter(lambda x: x['woType'] == 'PM' and x['endDealTime'][:10] == f'2025-{month}-{day}')
+
+        msg = f"自动提交工单任务完成，剩余 {len(records)} 条"
         logging.info(msg)
         notify.send(msg)
 

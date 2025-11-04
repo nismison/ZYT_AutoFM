@@ -1,7 +1,7 @@
 import logging
 import traceback
 
-from Notification import Notify
+from notification import Notify
 from fm_api import FMApi
 
 notify = Notify()
@@ -30,7 +30,10 @@ def auto_grab_task():
                 logging.warning(f"【{task['title']}】接单失败：{repr(e)}")
                 fail += 1
 
-        msg = f"自动接单完成：成功 {success}，失败 {fail}"
+        task_data = fm.get_task_list()
+        records = task_data.get("records", [])
+
+        msg = f"自动接单完成：成功 {success}，失败 {fail}，剩余 {len(records)}"
         logging.info(msg)
         notify.send(msg)
 

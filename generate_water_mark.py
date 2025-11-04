@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
-from Crypter import encrypt_watermark, create_watermark_data
+from crypter import encrypt_watermark, create_watermark_data
 
 
 def calculate_time(base_date, base_time, minute_offset=0):

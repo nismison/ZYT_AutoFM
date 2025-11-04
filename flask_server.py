@@ -15,10 +15,9 @@ from flask_cors import CORS
 from peewee import *
 from werkzeug.http import http_date
 
-from GenerateWaterMark import add_watermark_to_image
-from Notification import Notify
-
-logger = logging.getLogger(__name__)
+from generate_water_mark import add_watermark_to_image
+from notification import Notify
+from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL
 
 # ==================== 数据库配置 ====================
 db = SqliteDatabase(
@@ -35,18 +34,8 @@ db = SqliteDatabase(
 notify = Notify()
 
 # ==================== 本地存储配置 ====================
-BASE_URL = "https://api.zytsy.icu"
-
-# 相册图片存储目录（持久保存）
-GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery')
 os.makedirs(GALLERY_STORAGE_DIR, exist_ok=True)
-
-# 缓存图片存储目录（持久保存）
-GALLERY_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery_cache')
 os.makedirs(GALLERY_CACHE_DIR, exist_ok=True)
-
-# 水印图片存储目录（定时清理）
-WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'watermark')
 os.makedirs(WATERMARK_STORAGE_DIR, exist_ok=True)
 
 
