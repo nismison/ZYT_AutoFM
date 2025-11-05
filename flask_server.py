@@ -127,6 +127,7 @@ def create_app():
                 proxies={}  # 禁用代理
             )
         except requests.RequestException as e:
+            logger.error(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {request.method} /{path} -> ERROR ({e})")
             return Response(f"Upstream request failed: {e}", status=502)
 
         # 构造返回 Response，原样转发响应
@@ -138,6 +139,9 @@ def create_app():
             for name, value in resp.headers.items()
             if name.lower() not in excluded_headers
         }
+
+        logger.info(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {request.method} /{path} -> {resp.status_code}")
+
         return Response(resp.content, resp.status_code, headers)
 
     @app.route("/api/image/<image_type>/<image_id>")
