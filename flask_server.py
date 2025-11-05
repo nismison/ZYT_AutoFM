@@ -95,6 +95,48 @@ def get_image_url(image_id, image_type='gallery'):
     return f"{BASE_URL}/api/image/{image_type}/{image_id}"
 
 
+def forward_request(path):
+    # 去掉多余前导斜杠，保证拼接正确
+    path = path.lstrip('/')
+    target_url = f"{TARGET_BASE}/{path}"
+
+    headers = {k: v for k, v in request.headers if k.lower() != 'host'}
+
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            params=request.args,
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=30,
+            proxies={}  # 禁用系统代理
+        )
+    except requests.RequestException as e:
+        return Response(f"Upstream request failed: {e}", status=502)
+
+    excluded_headers = ['content-encoding', 'transfer-encoding', 'connection']
+    headers = {
+        name: value
+        for name, value in resp.headers.items()
+        if name.lower() not in excluded_headers
+    }
+
+    if path == "heimdall/api/oauth/access_token" and resp.status_code == 200:
+        access_token = (resp.json().get('result') or {}).get('access_token')
+        ql = QLApi()
+        success = ql.update_env("ZYT_TOKEN", access_token)
+        print("更新成功" if success else "更新失败")
+        if success:
+            Notify().send(f"Token更新成功: ...{access_token[-10:]}")
+        else:
+            Notify().send(f"Token更新失败")
+
+    return Response(resp.content, resp.status_code, headers)
+
+
 # ==================== Flask 应用工厂 ====================
 def create_app():
     """创建 Flask 应用"""
@@ -107,56 +149,16 @@ def create_app():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
+    # ===== /redirect 路由 =====
     @app.route('/redirect', defaults={'subpath': ''}, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
     @app.route('/redirect/<path:subpath>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-    def proxy(subpath):
-        # 获取原始请求路径，去掉 /redirect 前缀
-        original_path = request.path[len('/redirect'):]  # 保留前导斜杠
-        # 去掉开头多余的 /，确保拼接 TARGET_BASE 不会出现双斜杠
-        original_path = original_path.lstrip('/')
+    def proxy_redirect(subpath):
+        return forward_request(subpath)
 
-        target_url = f"{TARGET_BASE}/{original_path}"
-
-        # 获取请求的 headers（去掉 host）
-        headers = {k: v for k, v in request.headers if k.lower() != 'host'}
-
-        # 转发请求到目标
-        try:
-            resp = requests.request(
-                method=request.method,
-                url=target_url,
-                headers=headers,
-                params=request.args,  # 查询参数
-                data=request.get_data(),  # 原始 body 数据
-                cookies=request.cookies,
-                allow_redirects=False,  # 不在服务器端自动跟随重定向
-                timeout=30,
-                proxies={}  # 禁用代理
-            )
-        except requests.RequestException as e:
-            return Response(f"Upstream request failed: {e}", status=502)
-
-        # 构造返回 Response，原样转发响应
-        excluded_headers = [
-            'content-encoding', 'transfer-encoding', 'connection'
-        ]
-        headers = {
-            name: value
-            for name, value in resp.headers.items()
-            if name.lower() not in excluded_headers
-        }
-
-        if original_path == "heimdall/api/oauth/access_token" and resp.status_code == 200:
-            access_token = (resp.json().get('result') or {}).get('access_token')
-            ql = QLApi()
-            success = ql.update_env("ZYT_TOKEN", access_token)
-            print("更新成功" if success else "更新失败")
-            if success:
-                Notify().send(f"Token更新成功: ...{access_token[-10:]}")
-            else:
-                Notify().send(f"Token更新失败")
-
-        return Response(resp.content, resp.status_code, headers)
+    # ===== /galaxy 路由（曲线救国） =====
+    @app.route('/galaxy/<path:subpath>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+    def proxy_galaxy(subpath):
+        return forward_request(f"galaxy/{subpath}")
 
     @app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
