@@ -8,13 +8,14 @@ import uuid
 from datetime import datetime
 from math import ceil
 
+import requests
 from PIL import Image
-from flask import Flask, jsonify, request, send_file, make_response
+from flask import Flask, jsonify, request, send_file, make_response, Response
 from flask_cors import CORS
 from peewee import *
 from werkzeug.http import http_date
 
-from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL
+from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL, TARGET_BASE
 from generate_water_mark import add_watermark_to_image
 from notification import Notify
 
@@ -104,6 +105,41 @@ def create_app():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
+    @app.route('/redirect/<path:path>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+    def proxy(path):
+        # 拼接目标 URL（去掉 redirect 前缀）
+        target_url = f"{TARGET_BASE}/{path}"
+
+        # 获取请求的 headers（去掉 host）
+        headers = {k: v for k, v in request.headers if k.lower() != 'host'}
+
+        # 转发请求到目标
+        try:
+            resp = requests.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                params=request.args,  # 查询参数
+                data=request.get_data(),  # 原始 body 数据
+                cookies=request.cookies,
+                allow_redirects=False,  # 不在服务器端自动跟随重定向
+                timeout=30,
+                proxies={}  # 禁用代理
+            )
+        except requests.RequestException as e:
+            return Response(f"Upstream request failed: {e}", status=502)
+
+        # 构造返回 Response，原样转发响应
+        excluded_headers = [
+            'content-encoding', 'transfer-encoding', 'connection'
+        ]
+        headers = {
+            name: value
+            for name, value in resp.headers.items()
+            if name.lower() not in excluded_headers
+        }
+        return Response(resp.content, resp.status_code, headers)
+
     @app.route("/api/image/<image_type>/<image_id>")
     def serve_image(image_type, image_id):
         """

@@ -7,6 +7,8 @@ BASIC_TOKEN = os.getenv("ZYT_TOKEN") or \
               "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBQ0NFU1NfVE9LRU4iLCJjbGllbnRJZCI6IjVlOTZlYWMwNjE1MWQwY2UyZGQ5NTU0ZDdlZTE2N2NlIiwic2NvcGUiOiJhbGwgci1zdGFmZiIsInRva2VuIjoiMjQwOTg0MCIsImlhdCI6MTc2MjA2MjE0OCwiZXhwIjoxNzYyNjY2OTQ4fQ.RJZklvpDkWq_tLBCFDXl2sIz3tl4ul3lkDBYgk-Z8n8"
 
 FM_BASE_URL = "https://chuanplus-client.onewo.com/api/client"
+# 转发接口
+TARGET_BASE = "https://gw.4009515151.com"
 
 HEADERS_BASE = {
     "Content-Type": "application/json",
