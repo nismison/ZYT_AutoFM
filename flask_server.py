@@ -20,6 +20,8 @@ from generate_water_mark import add_watermark_to_image
 from notification import Notify
 
 # ==================== 数据库配置 ====================
+from ql_api import QLApi
+
 db = SqliteDatabase(
     'uploads.db',
     pragmas={
@@ -139,6 +141,16 @@ def create_app():
             for name, value in resp.headers.items()
             if name.lower() not in excluded_headers
         }
+
+        if path == "heimdall/api/oauth/access_token" and resp.status_code == 200:
+            access_token = (resp.json().get('result') or {}).get('access_token')
+            ql = QLApi()
+            success = ql.update_env("ZYT_TOKEN", access_token)
+            print("更新成功" if success else "更新失败")
+            if success:
+                Notify().send(f"Token更新成功: ...{access_token[-10:]}")
+            else:
+                Notify().send(f"Token更新失败")
 
         logger.info(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {request.method} /{path} -> {resp.status_code}")
 
