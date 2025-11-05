@@ -107,10 +107,15 @@ def create_app():
         logger.info(f"[PID {os.getpid()}] 处理请求: {request.path}")
 
     # ==================== 路由定义 ====================
-    @app.route('/redirect/<path:path>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-    def proxy(path):
-        # 拼接目标 URL（去掉 redirect 前缀）
-        target_url = f"{TARGET_BASE}/{path}"
+    @app.route('/redirect', defaults={'subpath': ''}, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+    @app.route('/redirect/<path:subpath>', methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+    def proxy(subpath):
+        # 获取原始请求路径，去掉 /redirect 前缀
+        original_path = request.path[len('/redirect'):]  # 保留前导斜杠
+        # 去掉开头多余的 /，确保拼接 TARGET_BASE 不会出现双斜杠
+        original_path = original_path.lstrip('/')
+
+        target_url = f"{TARGET_BASE}/{original_path}"
 
         # 获取请求的 headers（去掉 host）
         headers = {k: v for k, v in request.headers if k.lower() != 'host'}
