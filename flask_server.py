@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import random
 import string
@@ -14,8 +15,10 @@ from flask import Flask, jsonify, request, send_file, make_response, Response
 from flask_cors import CORS
 from peewee import *
 from werkzeug.http import http_date
+from werkzeug.utils import secure_filename
 
-from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL, TARGET_BASE
+from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger, BASE_URL, TARGET_BASE, \
+    IMMICH_API_KEY, IMMICH_URL
 from generate_water_mark import add_watermark_to_image
 from notification import Notify
 
@@ -93,6 +96,40 @@ def get_image_url(image_id, image_type='gallery'):
     image_type: 'gallery' 或 'watermark' 或 'gallery_cache'
     """
     return f"{BASE_URL}/api/image/{image_type}/{image_id}"
+
+
+def upload_to_immich_file(file_path):
+    """根据官方示例上传文件到 Immich"""
+    stats = os.stat(file_path)
+
+    headers = {
+        'Accept': 'application/json',
+        'x-api-key': IMMICH_API_KEY
+    }
+
+    file_created = datetime.fromtimestamp(stats.st_mtime)
+
+    data = {
+        'deviceAssetId': f'{os.path.basename(file_path)}-{stats.st_mtime}',
+        'deviceId': 'python',
+        'fileCreatedAt': file_created,
+        'fileModifiedAt': file_created,
+        'isFavorite': 'false',
+    }
+
+    files = {
+        'assetData': open(file_path, 'rb')
+    }
+
+    response = requests.post(
+        f'{IMMICH_URL}/assets', headers=headers, data=data, files=files)
+
+    files['assetData'].close()
+
+    try:
+        return response.json()
+    except Exception:
+        return jsonify({"status": "fail"})
 
 
 # ==================== Flask 应用工厂 ====================
@@ -309,59 +346,38 @@ def create_app():
         """上传到相册 - 保存到相册目录（持久保存）"""
         try:
             file = request.files.get('file')
-            device_model = request.form.get('device_model', '')
             etag = request.form.get('etag', '')
 
-            if not all([file, device_model, etag]):
-                return jsonify({"error": "缺少必要参数(file, device_model, etag)"}), 400
+            if not all([file, etag]):
+                return jsonify({"error": "缺少必要参数(file, etag)"}), 400
 
-            filename = file.filename
+            # 创建带扩展名的临时文件
+            suffix = os.path.splitext(file.filename)[1]  # 例如 ".jpg" ".png" ".mp4"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                file.save(tmp.name)
+                tmp_path = tmp.name
 
-            # 生成唯一的image_id和文件名
-            image_id = uuid.uuid4().hex
-            ext = os.path.splitext(filename)[1] or '.jpg'
-            local_filename = f"{image_id}{ext}"
-            save_path = os.path.join(GALLERY_STORAGE_DIR, local_filename)
-            thumb_path = os.path.join(GALLERY_CACHE_DIR, f"{image_id}_thumb{ext}")
-
-            # 直接保存到相册存储目录
-            file.save(save_path)
-
-            # 获取文件信息
-            file_size = os.path.getsize(save_path)
-            img = Image.open(save_path)
-            width, height = img.width, img.height
-            # 保存预览图
-            img.save(thumb_path, quality=50, optimize=True)
-            img.close()
-
-            # 生成图片外链URL
-            oss_url = get_image_url(image_id, 'gallery')
-            thumb_url = get_image_url(image_id, 'gallery_cache')
+            result = upload_to_immich_file(tmp_path)
+            os.remove(tmp_path)
 
             # 保存数据库记录
             UploadRecord.create(
-                oss_url=oss_url,
-                file_size=file_size,
-                device_model=device_model,
-                original_filename=filename,
+                oss_url='oss_url',
+                file_size=100,
                 upload_time=datetime.now(),
                 etag=etag,
-                width=width,
-                height=height,
-                thumb=thumb_url
+                width=500,
+                height=500,
             )
 
-            logger.info(f"相册图片已保存: {filename} -> {oss_url}")
-
-            return jsonify({
-                "success": True,
-                "message": "文件已成功保存",
-                "oss_url": oss_url,
-                "filename": filename,
-                "size": file_size,
-                "etag": etag
-            }), 200
+            if result.get("error"):
+                return jsonify({"success": False, "error": result.get("message")}), 500
+            else:
+                print(result)
+                return jsonify({
+                    "success": True,
+                    "message": "文件已成功保存",
+                }), 200
 
         except Exception as e:
             import traceback

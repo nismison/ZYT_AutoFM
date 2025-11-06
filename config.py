@@ -18,6 +18,10 @@ HEADERS_BASE = {
 # ==================== 图库本地存储配置 ====================
 BASE_URL = "https://api.zytsy.icu"
 
+# ==================== immich配置 ====================
+IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'                # replace with a valid api key
+IMMICH_URL = 'https://immich.zytsy.icu/api'  # replace as needed
+
 # 相册图片存储目录（持久保存）
 GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery')
 # 缓存图片存储目录（持久保存）
