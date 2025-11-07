@@ -7,36 +7,133 @@
   <style>
     body {
       margin: 0;
-      padding: 0;
-      background: #111;
-      color: #0f0;
+      background: #0d0d0d;
+      color: #9f9;
       font-family: monospace;
       font-size: 14px;
-      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #222;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #111;
+      color: #fff;
+      font-size: 14px;
+    }
+    button {
+      background: #333;
+      border: none;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button.active {
+      background: #006400;
     }
     #log {
-      white-space: pre-wrap;
+      flex: 1;
       padding: 10px;
       overflow-y: auto;
-      height: 100vh;
+      white-space: nowrap;
       box-sizing: border-box;
     }
+    .line {
+      display: block;
+      padding: 2px 0;
+    }
+    .ok { color: #4aff4a; }
+    .error { color: #ff5555; }
+    .warn { color: #ffaa00; }
+    .info { color: #9f9; }
   </style>
 </head>
 <body>
+  <header>
+    <input id="filter" type="text" placeholder="输入关键词过滤 (例如 error 或 502)" />
+    <button id="toggleScroll" class="active">自动滚动 ✓</button>
+  </header>
+
   <div id="log">连接中...</div>
+
   <script>
     const logBox = document.getElementById('log');
+    const filterInput = document.getElementById('filter');
+    const toggleScrollBtn = document.getElementById('toggleScroll');
     const eventSource = new EventSource('/stream');
 
+    let autoScroll = true;
+    let currentFilter = '';
+    let lines = [];
+
+    function classify(line) {
+      const l = line.toLowerCase();
+      if (l.includes('error') || l.includes('exception') || l.includes('traceback') || l.includes(' 500 ') || l.includes('502') || l.includes('bad gateway')) {
+        return 'error';
+      }
+      if (l.includes('200 ok') || l.includes('"code":200') || l.includes('success')) {
+        return 'ok';
+      }
+      if (l.includes('warn') || l.includes('timeout')) {
+        return 'warn';
+      }
+      return 'info';
+    }
+
+    function render() {
+      logBox.innerHTML = '';
+      const filtered = currentFilter
+        ? lines.filter(l => l.text.toLowerCase().includes(currentFilter))
+        : lines;
+      for (const l of filtered) {
+        const span = document.createElement('span');
+        span.className = `line ${l.cls}`;
+        span.textContent = l.text;
+        logBox.appendChild(span);
+      }
+      if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+    }
+
     eventSource.onmessage = (event) => {
-      logBox.textContent += '\n' + event.data;
-      logBox.scrollTop = logBox.scrollHeight;
+      const line = event.data.replace(/\r?\n/g, ' ').trim();
+      if (!line) return;
+      lines.push({ text: line, cls: classify(line) });
+      if (currentFilter && !line.toLowerCase().includes(currentFilter)) return;
+      const span = document.createElement('span');
+      span.className = `line ${classify(line)}`;
+      span.textContent = line;
+      logBox.appendChild(span);
+      if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
     };
 
     eventSource.onerror = () => {
-      logBox.textContent += '\n[连接中断，尝试重连中...]';
+      const span = document.createElement('span');
+      span.className = 'line warn';
+      span.textContent = '[连接中断，尝试重连中...]';
+      logBox.appendChild(span);
     };
+
+    filterInput.addEventListener('input', () => {
+      currentFilter = filterInput.value.trim().toLowerCase();
+      render();
+    });
+
+    toggleScrollBtn.addEventListener('click', () => {
+      autoScroll = !autoScroll;
+      toggleScrollBtn.classList.toggle('active', autoScroll);
+      toggleScrollBtn.textContent = autoScroll ? '自动滚动 ✓' : '自动滚动 ✗';
+    });
   </script>
 </body>
 </html>
