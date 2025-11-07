@@ -1,8 +1,8 @@
 from flask import Flask, request
 from flask_cors import CORS
 
-from config import logger
-from db import init_database_connection, ensure_tables
+from config import logger, IS_DEV
+from db import init_database_connection
 from routes import register_blueprints
 
 
@@ -25,7 +25,7 @@ def create_app() -> Flask:
     return app
 
 
-if __name__ == "__main__":
-    ensure_tables()
-    app = create_app()
+app = create_app()
+
+if IS_DEV:
     app.run(host="0.0.0.0", port=5001, debug=True)
