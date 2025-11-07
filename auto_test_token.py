@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from fm_api import FMApi
-from notification import Notify
+from apis.fm_api import FMApi
+from utils.notification import Notify
 
 
 today = datetime.today()

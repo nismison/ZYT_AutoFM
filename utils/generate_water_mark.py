@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
-from crypter import encrypt_watermark, create_watermark_data
+from utils.crypter import create_watermark_data, encrypt_watermark
 
 
 def calculate_time(base_date, base_time, minute_offset=0):
@@ -188,7 +188,7 @@ def draw_text_watermark(draw, image, time_info, name, scale):
     location_font_size = 32  # 位置字体大小
 
     # 加载字体
-    font_path = "siyuansongti.ttf"  # 替换为你的字体文件路径
+    font_path = "static/siyuansongti.ttf"  # 替换为你的字体文件路径
     try:
         time_font = ImageFont.truetype(font_path, time_font_size)
         name_font = ImageFont.truetype(font_path, name_font_size)
@@ -255,7 +255,7 @@ def draw_text_watermark(draw, image, time_info, name, scale):
     icon_x = location_x + 22
     icon_y = location_y + 14
 
-    location_icon = Image.open("location_icon.png")
+    location_icon = Image.open("static/location_icon.png")
     location_icon = location_icon.resize((30, 30))
     # 如果图标有透明通道，保持透明
     if location_icon.mode != 'RGBA':

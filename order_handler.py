@@ -7,11 +7,11 @@ import re
 import tempfile
 import uuid
 
-from generate_water_mark import add_watermark_to_image
-from notification import Notify
+from utils.generate_water_mark import add_watermark_to_image
+from utils.notification import Notify
 from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_XFSS, order_template_DYL
-from utils import Utils
+from utils.storage import get_random_template_file
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,6 @@ class OrderHandler:
     def __init__(self, fm, oss):
         self.fm = fm
         self.oss = oss
-        self.utils = Utils()
         self.notify = Notify()
 
         # 设置统一临时目录
@@ -166,7 +165,7 @@ class OrderHandler:
 
             # 执行水印生成
             add_watermark_to_image(
-                original_image_path=self.utils.get_random_template_file(template_path, str(i + 1)),
+                original_image_path=get_random_template_file(template_path, str(i + 1)),
                 base_time=f"{hour}:{minute}",
                 output_path=tmp_path
             )

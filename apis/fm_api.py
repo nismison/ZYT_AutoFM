@@ -1,6 +1,7 @@
-import json
-import requests
 import logging
+
+import requests
+
 from config import BASIC_TOKEN, FM_BASE_URL, HEADERS_BASE
 
 logger = logging.getLogger(__name__)

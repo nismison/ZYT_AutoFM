@@ -16,11 +16,16 @@ HEADERS_BASE = {
 }
 
 # ==================== 图库本地存储配置 ====================
-BASE_URL = "https://api.zytsy.icu"
+# 开发环境
+BASE_URL = "http://192.168.245.233:5001"
+IMMICH_URL = 'https://immich.zytsy.icu/api'
+
+# 正式环境
+# BASE_URL = "https://api.zytsy.icu"
+# IMMICH_URL = 'http://127.0.0.1:2283/api'
 
 # ==================== immich配置 ====================
-IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'                # replace with a valid api key
-IMMICH_URL = 'https://immich.zytsy.icu/api'  # replace as needed
+IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'
 
 # 相册图片存储目录（持久保存）
 GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery')
@@ -31,6 +36,12 @@ WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'wate
 
 LOGGING_CONFIG = {
     'version': 1,
+    'formatters': {
+        'default': {
+            'format': '[%(asctime)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
