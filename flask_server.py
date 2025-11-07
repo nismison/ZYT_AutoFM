@@ -21,8 +21,13 @@ def truncate(text, limit=500):
 
 def summarize_by_type(content_type, data):
     """返回内容简要说明"""
+    text = data or ""
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+
     if not content_type:
-        return truncate(data)
+        return truncate(text)
+
     ct = content_type.lower()
     if "image" in ct:
         return "[图片]"
@@ -32,7 +37,25 @@ def summarize_by_type(content_type, data):
         return "[音频]"
     if "multipart/form-data" in ct or "octet-stream" in ct:
         return "[文件]"
-    return truncate(data)
+    return truncate(text)
+
+
+def is_textual_content(content_type: str | None) -> bool:
+    if not content_type:
+        return True
+
+    ct = content_type.lower()
+    if ct.startswith("text/"):
+        return True
+
+    textual_prefixes = (
+        "application/json",
+        "application/javascript",
+        "application/xml",
+        "application/xhtml+xml",
+        "application/x-www-form-urlencoded",
+    )
+    return ct.startswith(textual_prefixes)
 
 
 def create_app() -> Flask:
@@ -49,7 +72,13 @@ def create_app() -> Flask:
             file_fields = {k: "[文件]" for k in request.files}
             body = {"form": form_fields, "files": file_fields}
         else:
-            body = summarize_by_type(content_type, request.get_data(as_text=True))
+            data = None
+            if is_textual_content(content_type):
+                try:
+                    data = request.get_data(as_text=True)
+                except UnicodeDecodeError:
+                    data = request.get_data()  # 回退到字节数据，交由 summarize_by_type 处理
+            body = summarize_by_type(content_type, data)
 
         log_line("=" * 50)
         log_line("请求路径:", request.path)
@@ -63,8 +92,16 @@ def create_app() -> Flask:
         elif getattr(response, "direct_passthrough", False):
             # direct_passthrough 模式下无法读取数据，否则会触发 RuntimeError
             body = "[直接透传响应]"
+        elif not is_textual_content(content_type):
+            body = summarize_by_type(content_type, None)
         else:
-            body = summarize_by_type(content_type, response.get_data(as_text=True))
+            try:
+                body = summarize_by_type(content_type, response.get_data(as_text=True))
+            except (RuntimeError, UnicodeDecodeError):
+                try:
+                    body = summarize_by_type(content_type, response.get_data())
+                except RuntimeError:
+                    body = "[响应内容不可读取]"
         log_line("响应状态:", response.status)
         log_line("响应内容:", body)
         return response
