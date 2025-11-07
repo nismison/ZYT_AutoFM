@@ -60,6 +60,9 @@ def create_app() -> Flask:
         content_type = response.content_type or ""
         if "text/event-stream" in content_type:
             body = "[SSE流]"
+        elif getattr(response, "direct_passthrough", False):
+            # direct_passthrough 模式下无法读取数据，否则会触发 RuntimeError
+            body = "[直接透传响应]"
         else:
             body = summarize_by_type(content_type, response.get_data(as_text=True))
         log_line("响应状态:", response.status)
