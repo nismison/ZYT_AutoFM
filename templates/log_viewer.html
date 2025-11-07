@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <title>实时日志查看</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    #log {
+      white-space: pre-wrap;
+      padding: 10px;
+      overflow-y: auto;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="log">连接中...</div>
+  <script>
+    const logBox = document.getElementById('log');
+    const eventSource = new EventSource('/stream');
+
+    eventSource.onmessage = (event) => {
+      logBox.textContent += '\n' + event.data;
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    eventSource.onerror = () => {
+      logBox.textContent += '\n[连接中断，尝试重连中...]';
+    };
+  </script>
+</body>
+</html>
