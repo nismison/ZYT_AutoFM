@@ -132,6 +132,66 @@ def upload_to_immich_file(file_path):
         return jsonify({"status": "fail"})
 
 
+def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 255, 255)):
+    """
+    自适应拼贴图布局（不留白，不强制相同尺寸）
+    - 自动调整每行高度，保持整体宽度一致
+    - 各行图片等比例缩放，填满整行
+    - 整体效果类似瀑布流/拼贴墙
+    """
+    from PIL import Image
+    images = [Image.open(p).convert("RGB") for p in image_paths]
+    n = len(images)
+    if n == 0:
+        raise ValueError("No images provided")
+
+    # 计算行数（尽量接近正方形视觉）
+    import math
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+
+    # 按行分组
+    groups = []
+    idx = 0
+    for _ in range(rows):
+        remain = n - idx
+        count = min(cols, remain)
+        groups.append(images[idx:idx + count])
+        idx += count
+
+    y_offset = 0
+    row_images = []
+    total_height = 0
+
+    # 每行自动缩放填满 target_width
+    for row_imgs in groups:
+        # 行内原始宽高比例总和
+        ratios = [img.width / img.height for img in row_imgs]
+        total_ratio = sum(ratios)
+        # 行高按目标宽计算
+        row_height = int(target_width / total_ratio)
+        scaled_row = []
+        for img, ratio in zip(row_imgs, ratios):
+            new_w = int(row_height * ratio)
+            scaled_row.append(img.resize((new_w, row_height)))
+        row_images.append(scaled_row)
+        total_height += row_height + padding
+
+    # 创建最终画布
+    merged = Image.new("RGB", (target_width, total_height - padding), bg_color)
+
+    y = 0
+    for row in row_images:
+        x = 0
+        for img in row:
+            merged.paste(img, (x, y))
+            x += img.width + padding
+            img.close()
+        y += row[0].height + padding
+
+    return merged
+
+
 # ==================== Flask 应用工厂 ====================
 def create_app():
     """创建 Flask 应用"""
@@ -278,46 +338,47 @@ def create_app():
 
     @app.route("/upload_with_watermark", methods=["POST"])
     def upload_with_watermark():
-        """上传并添加水印（支持单文件或多文件）"""
+        """上传并添加水印（支持单文件/多文件，可选合并为一张图）"""
         try:
             name = request.form.get('name')
             user_number = request.form.get('user_number')
             base_date = request.form.get('base_date')
             base_time = request.form.get('base_time')
+            merge = request.form.get('merge') == "true"
 
+            # 获取所有文件（兼容 file、file0、file1...）
             files = []
             for key in request.files.keys():
                 files += request.files.getlist(key)
-
-            # 兼容单文件上传
             if not files and 'file' in request.files:
                 files = [request.files['file']]
-
-            print(f">>>>>>>>>>files: {files}<<<<<<<<<<")
 
             if not all([name, user_number]) or not files:
                 return jsonify({"error": "缺少必要参数(name, user_number, file)"}), 400
 
-            oss_urls = []
-            # 基础时间
+            # 初始化时间
             if base_date and base_time:
                 current_time = datetime.strptime(f"{base_date} {base_time}", "%Y-%m-%d %H:%M")
             else:
                 current_time = datetime.now()
 
+            result_paths = []
+            temp_paths = []
+
+            # 生成单张水印图
             for file in files:
                 fd, original_path = tempfile.mkstemp(suffix=".jpg")
-                os.close(fd)  # 关闭句柄，Windows必须
+                os.close(fd)
                 file.save(original_path)
+                temp_paths.append(original_path)
 
-                # 文件名
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 random_suffix = generate_random_suffix()
                 image_id = f"{user_number}_{timestamp}_{random_suffix}"
                 result_filename = f"{image_id}.jpg"
                 result_path = os.path.join(WATERMARK_STORAGE_DIR, result_filename)
 
-                # 每张图片时间+1~2分钟
+                # 每张图片时间 +1~2 分钟
                 current_time += timedelta(minutes=random.randint(1, 2))
                 time_str = current_time.strftime("%H:%M")
 
@@ -330,12 +391,33 @@ def create_app():
                     output_path=result_path
                 )
 
-                oss_url = get_image_url(image_id, 'watermark')
-                oss_urls.append(oss_url)
+                result_paths.append((image_id, result_path))
 
-                os.remove(original_path)
+            # 合并模式
+            if merge and len(result_paths) > 1:
+                merged_image = merge_images_grid([p[1] for p in result_paths])
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                random_suffix = generate_random_suffix()
+                merged_id = f"{user_number}_{timestamp}_{random_suffix}_merged"
+                merged_filename = f"{merged_id}.jpg"
+                merged_path = os.path.join(WATERMARK_STORAGE_DIR, merged_filename)
+                merged_image.save(merged_path, quality=90, optimize=True)
+                merged_image.close()
 
-            logger.info(f"生成水印图片 {len(oss_urls)} 张")
+                oss_urls = [get_image_url(merged_id, 'watermark')]
+
+            # 不合并 → 返回所有直链
+            else:
+                oss_urls = [get_image_url(iid, 'watermark') for iid, _ in result_paths]
+
+            # 清理临时文件
+            for p in temp_paths:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
+            logger.info(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
 
             return jsonify({
                 "success": True,
