@@ -9,3 +9,5 @@
 /uwsgi.ini
 /storage/
 /upload_temp/
+/apks/
+/.env

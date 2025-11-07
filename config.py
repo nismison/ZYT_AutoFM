@@ -1,5 +1,9 @@
 import os
 import logging.config
+from dotenv import load_dotenv
+
+load_dotenv()
+IS_DEV = os.getenv("ENV") == "dev"
 
 # ==================== 自动工单配置 ====================
 # 基础 Token (从环境变量读取)
@@ -16,13 +20,14 @@ HEADERS_BASE = {
 }
 
 # ==================== 图库本地存储配置 ====================
-# 开发环境
-BASE_URL = "http://192.168.245.233:5001"
-IMMICH_URL = 'https://immich.zytsy.icu/api'
-
-# 正式环境
-# BASE_URL = "https://api.zytsy.icu"
-# IMMICH_URL = 'http://127.0.0.1:2283/api'
+if IS_DEV:
+    # 开发环境
+    BASE_URL = "http://192.168.245.233:5001"
+    IMMICH_URL = 'https://immich.zytsy.icu/api'
+else:
+    # 正式环境
+    BASE_URL = "https://api.zytsy.icu"
+    IMMICH_URL = 'http://127.0.0.1:2283/api'
 
 # ==================== immich配置 ====================
 IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'
