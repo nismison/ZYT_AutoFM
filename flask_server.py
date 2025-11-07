@@ -6,7 +6,7 @@ import string
 import tempfile
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import ceil
 
 import requests
@@ -278,68 +278,75 @@ def create_app():
 
     @app.route("/upload_with_watermark", methods=["POST"])
     def upload_with_watermark():
-        """上传并添加水印 - 保存到水印目录"""
-        original_path = None
+        """上传并添加水印（支持单文件或多文件）"""
         try:
             name = request.form.get('name')
             user_number = request.form.get('user_number')
             base_date = request.form.get('base_date')
             base_time = request.form.get('base_time')
-            file = request.files.get('file')
 
-            if not all([name, user_number, file]):
+            files = []
+            for key in request.files.keys():
+                files += request.files.getlist(key)
+
+            # 兼容单文件上传
+            if not files and 'file' in request.files:
+                files = [request.files['file']]
+
+            print(f">>>>>>>>>>files: {files}<<<<<<<<<<")
+
+            if not all([name, user_number]) or not files:
                 return jsonify({"error": "缺少必要参数(name, user_number, file)"}), 400
 
-            # 保存原始文件到临时目录
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                file.save(tmp.name)
-                original_path = tmp.name
+            oss_urls = []
+            # 基础时间
+            if base_date and base_time:
+                current_time = datetime.strptime(f"{base_date} {base_time}", "%Y-%m-%d %H:%M")
+            else:
+                current_time = datetime.now()
 
-                # 压缩图片
-                img = Image.open(tmp.name)
-                img.save(original_path, quality=80, optimize=True)
-                img.close()
+            for file in files:
+                fd, original_path = tempfile.mkstemp(suffix=".jpg")
+                os.close(fd)  # 关闭句柄，Windows必须
+                file.save(original_path)
 
-            # 生成唯一的文件名（添加随机后缀避免重复）
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            random_suffix = generate_random_suffix()
-            image_id = f"{user_number}_{timestamp}_{random_suffix}"
-            result_filename = f"{image_id}.jpg"
-            result_path = os.path.join(WATERMARK_STORAGE_DIR, result_filename)
+                # 文件名
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                random_suffix = generate_random_suffix()
+                image_id = f"{user_number}_{timestamp}_{random_suffix}"
+                result_filename = f"{image_id}.jpg"
+                result_path = os.path.join(WATERMARK_STORAGE_DIR, result_filename)
 
-            # 添加水印，直接输出到水印存储目录
-            add_watermark_to_image(
-                original_image_path=original_path,
-                name=name,
-                user_number=user_number,
-                base_date=base_date,
-                base_time=base_time,
-                output_path=result_path
-            )
+                # 每张图片时间+1~2分钟
+                current_time += timedelta(minutes=random.randint(1, 2))
+                time_str = current_time.strftime("%H:%M")
 
-            # 生成外链URL
-            oss_url = get_image_url(image_id, 'watermark')
+                add_watermark_to_image(
+                    original_image_path=original_path,
+                    name=name,
+                    user_number=user_number,
+                    base_date=base_date or datetime.now().strftime("%Y-%m-%d"),
+                    base_time=time_str,
+                    output_path=result_path
+                )
 
-            logger.info(f"水印图片已生成: {result_path} -> {oss_url}")
+                oss_url = get_image_url(image_id, 'watermark')
+                oss_urls.append(oss_url)
+
+                os.remove(original_path)
+
+            logger.info(f"生成水印图片 {len(oss_urls)} 张")
 
             return jsonify({
                 "success": True,
-                "oss_url": oss_url,
-                "oss_policy": {}
+                "oss_urls": oss_urls,
+                "count": len(oss_urls)
             })
 
         except Exception as e:
             import traceback
             traceback.print_exc()
             return jsonify({"success": False, "error": str(e)}), 500
-
-        finally:
-            # 只清理原始临时文件
-            if original_path and os.path.exists(original_path):
-                try:
-                    os.remove(original_path)
-                except Exception:
-                    pass
 
     @app.route("/upload_to_gallery", methods=["POST"])
     def upload_to_gallery():
