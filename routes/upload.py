@@ -1,14 +1,17 @@
 import os
-import tempfile
 import random
+import tempfile
 from datetime import datetime, timedelta
+
 from flask import Blueprint, jsonify, request
-from config import WATERMARK_STORAGE_DIR, logger
-from utils.generate_water_mark import add_watermark_to_image
+
+from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord
-from utils.storage import generate_random_suffix, get_image_url
-from utils.merge import merge_images_grid
+from utils.generate_water_mark import add_watermark_to_image
 from utils.immich import upload_to_immich_file
+from utils.logger import log_line
+from utils.merge import merge_images_grid
+from utils.storage import generate_random_suffix, get_image_url
 
 bp = Blueprint("upload", __name__)
 
@@ -105,7 +108,7 @@ def upload_with_watermark():
             except Exception:
                 pass
 
-        logger.info(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
+        log_line(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
         return jsonify({"success": True, "oss_urls": oss_urls, "count": len(oss_urls)})
 
     except Exception as e:

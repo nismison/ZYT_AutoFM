@@ -24,10 +24,12 @@ if IS_DEV:
     # 开发环境
     BASE_URL = "http://192.168.245.233:5001"
     IMMICH_URL = 'https://immich.zytsy.icu/api'
+    LOG_PATH = "./gunicorn_error.log"
 else:
     # 正式环境
     BASE_URL = "https://api.zytsy.icu"
     IMMICH_URL = 'http://127.0.0.1:2283/api'
+    LOG_PATH = "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
 
 # ==================== immich配置 ====================
 IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'

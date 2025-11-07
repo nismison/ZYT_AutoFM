@@ -1,9 +1,10 @@
 import os
 from datetime import datetime
 from peewee import *
-from config import logger
 
 # SQLite 数据库，启用 WAL，适合多进程读多写少
+from utils.logger import log_line
+
 _db = SqliteDatabase(
     'uploads.db',
     pragmas={
@@ -44,11 +45,11 @@ def init_database_connection():
     if _db.is_closed():
         _db.connect(reuse_if_open=True)
         _db.execute_sql("PRAGMA journal_mode=WAL;")
-        logger.info(f"[PID {os.getpid()}] 数据库连接已建立 (WAL 启用)")
+        log_line(f"[PID {os.getpid()}] 数据库连接已建立 (WAL 启用)")
 
 
 def ensure_tables():
     """确保表结构存在"""
     init_database_connection()
     _db.create_tables([UploadRecord], safe=True)
-    logger.info("[主进程] 数据库表结构检查完成")
+    log_line("[主进程] 数据库表结构检查完成")

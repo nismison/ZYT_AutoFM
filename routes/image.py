@@ -1,9 +1,12 @@
+import hashlib
 import os
 import time
-import hashlib
+
 from flask import Blueprint, jsonify, request, make_response, send_file
 from werkzeug.http import http_date
-from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR, logger
+
+from config import GALLERY_STORAGE_DIR, GALLERY_CACHE_DIR, WATERMARK_STORAGE_DIR
+from utils.logger import log_line
 
 bp = Blueprint("image", __name__)
 
@@ -48,5 +51,5 @@ def serve_image(image_type, image_id):
         return resp
 
     except Exception as e:
-        logger.error(f"获取图片失败: {e}")
+        log_line(f"获取图片失败: {e}")
         return jsonify({"error": str(e)}), 500

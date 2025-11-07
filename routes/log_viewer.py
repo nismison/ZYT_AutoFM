@@ -4,10 +4,9 @@ from collections import deque
 
 from flask import Blueprint, render_template, Response
 
+from config import LOG_PATH
+
 bp = Blueprint("log_viewer", __name__)
-
-
-LOG_FILE = "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
 
 
 @bp.route("/logs")
@@ -20,11 +19,11 @@ def stream():
     """先输出文件末尾500行，再实时推送新增内容"""
     def generate():
         # 等待文件出现
-        while not os.path.exists(LOG_FILE):
+        while not os.path.exists(LOG_PATH):
             time.sleep(1)
 
         # 打开文件并准备读取
-        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+        with open(LOG_PATH, "r", encoding="utf-8", errors="ignore") as f:
             # 取最后500行
             last_lines = deque(f, maxlen=500)
             for line in last_lines:
