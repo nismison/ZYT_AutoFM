@@ -58,11 +58,13 @@ def create_app() -> Flask:
     @app.after_request
     def log_response(response):
         content_type = response.content_type or ""
-        body = summarize_by_type(content_type, response.get_data(as_text=True))
+        if "text/event-stream" in content_type:
+            body = "[SSE流]"
+        else:
+            body = summarize_by_type(content_type, response.get_data(as_text=True))
         log_line("响应状态:", response.status)
         log_line("响应内容:", body)
         return response
-
     # 蓝图
     register_blueprints(app)
 
