@@ -45,7 +45,14 @@ def check_update():
     """返回最大版本号的文件信息"""
     latest = find_latest_file()
     if not latest:
-        return jsonify({"error": "no files found"}), 404
+        return jsonify({
+            "version": "0.0.0",
+            "now_url": "",
+            "silent": 0,
+            "force": 1,
+            "net_check": 0,
+            "note": ""
+        })
 
     return jsonify({
         "version": latest["version"],
