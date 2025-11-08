@@ -11,3 +11,5 @@
 /upload_temp/
 /apks/
 /.env
+/gunicorn_error.log
+/test.py

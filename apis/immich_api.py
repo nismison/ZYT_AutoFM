@@ -9,7 +9,6 @@ from config import IMMICH_API_KEY, IMMICH_URL
 class IMMICHApi:
     def __init__(self):
         self.headers = {
-            "Content-Type": "application/json",
             'Accept': 'application/json',
             "x-api-key": IMMICH_API_KEY,
         }
@@ -32,8 +31,8 @@ class IMMICHApi:
     def upload_to_immich_file(self, file_path: str):
         """上传文件到 Immich"""
         stats = os.stat(file_path)
+        file_created = datetime.fromtimestamp(stats.st_mtime).isoformat()
 
-        file_created = datetime.fromtimestamp(stats.st_mtime)
         data = {
             'deviceAssetId': f"{os.path.basename(file_path)}-{stats.st_mtime}",
             'deviceId': 'python',
@@ -48,8 +47,10 @@ class IMMICHApi:
 
         try:
             resp = requests.post(f"{IMMICH_URL}/assets", headers=self.headers, data=data, files=files)
+            print(f">>>>>>>>>>resp.text: {resp.text}<<<<<<<<<<")
             try:
                 resp_json = resp.json()
+                print(f">>>>>>>>>>resp_json: {resp_json}<<<<<<<<<<")
                 return resp_json.get("id", None)
             except Exception:
                 return None

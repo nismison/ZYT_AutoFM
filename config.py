@@ -2,6 +2,8 @@ import os
 import logging.config
 from dotenv import load_dotenv
 
+from utils.ip_address import get_real_lan_ip
+
 load_dotenv()
 IS_DEV = os.getenv("ENV") == "dev"
 
@@ -22,7 +24,8 @@ HEADERS_BASE = {
 # ==================== 图库本地存储配置 ====================
 if IS_DEV:
     # 开发环境
-    BASE_URL = "http://192.168.245.233:5001"
+    ip = get_real_lan_ip()
+    BASE_URL = f"http://{ip}:5001"
     IMMICH_URL = 'https://immich.zytsy.icu/api'
     LOG_PATH = "./gunicorn_error.log"
 else:

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from flask import Flask, request
 from flask_cors import CORS
@@ -40,7 +41,7 @@ def summarize_by_type(content_type, data):
     return truncate(text)
 
 
-def is_textual_content(content_type: str | None) -> bool:
+def is_textual_content(content_type: Optional[str]) -> bool:
     if not content_type:
         return True
 
