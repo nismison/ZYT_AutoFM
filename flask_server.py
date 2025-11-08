@@ -62,7 +62,7 @@ def is_textual_content(content_type: Optional[str]) -> bool:
 
 def should_skip_logging(path: str) -> bool:
     """过滤不需要记录日志的路径"""
-    skip_prefixes = ("/redirect", "/logs", "/stream", "/api/image", "/send_notify")
+    skip_prefixes = ("/logs", "/stream", "/api/image", "/send_notify")
     return any(path.startswith(p) for p in skip_prefixes)
 
 
