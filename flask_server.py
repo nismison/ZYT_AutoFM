@@ -10,7 +10,10 @@ from routes import register_blueprints
 from utils.logger import log_line
 
 
-def now():
+# ==================================================
+# 工具函数
+# ==================================================
+def now() -> str:
     return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
 
 
@@ -21,7 +24,7 @@ def truncate(text, limit=500):
 
 
 def summarize_by_type(content_type, data):
-    """返回内容简要说明"""
+    """根据类型生成内容概要"""
     text = data or ""
     if isinstance(text, bytes):
         text = text.decode("utf-8", errors="replace")
@@ -44,11 +47,9 @@ def summarize_by_type(content_type, data):
 def is_textual_content(content_type: Optional[str]) -> bool:
     if not content_type:
         return True
-
     ct = content_type.lower()
     if ct.startswith("text/"):
         return True
-
     textual_prefixes = (
         "application/json",
         "application/javascript",
@@ -59,14 +60,27 @@ def is_textual_content(content_type: Optional[str]) -> bool:
     return ct.startswith(textual_prefixes)
 
 
+def should_skip_logging(path: str) -> bool:
+    """过滤不需要记录日志的路径"""
+    skip_prefixes = ("/redirect", "/logs", "/stream", "/api/image", "/send_notify")
+    return any(path.startswith(p) for p in skip_prefixes)
+
+
+# ==================================================
+# Flask 应用
+# ==================================================
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    # DB 连接
+    # 初始化数据库连接
     init_database_connection()
 
     @app.before_request
     def log_request():
+        """请求前日志记录"""
+        if should_skip_logging(request.path):
+            return
+
         content_type = request.content_type or ""
         if "multipart/form-data" in content_type:
             form_fields = {k: v for k, v in request.form.items()}
@@ -78,20 +92,23 @@ def create_app() -> Flask:
                 try:
                     data = request.get_data(as_text=True)
                 except UnicodeDecodeError:
-                    data = request.get_data()  # 回退到字节数据，交由 summarize_by_type 处理
+                    data = request.get_data()
             body = summarize_by_type(content_type, data)
 
-        log_line("=" * 50)
-        log_line("请求路径:", request.path)
-        log_line("请求数据:", body)
+        log_line("=" * 60)
+        log_line(f"{now()} 请求路径: {request.path}")
+        log_line(f"{now()} 请求数据: {body}")
 
     @app.after_request
     def log_response(response):
+        """响应后日志记录"""
+        if should_skip_logging(request.path):
+            return response
+
         content_type = response.content_type or ""
         if "text/event-stream" in content_type:
             body = "[SSE流]"
         elif getattr(response, "direct_passthrough", False):
-            # direct_passthrough 模式下无法读取数据，否则会触发 RuntimeError
             body = "[直接透传响应]"
         elif not is_textual_content(content_type):
             body = summarize_by_type(content_type, None)
@@ -103,17 +120,23 @@ def create_app() -> Flask:
                     body = summarize_by_type(content_type, response.get_data())
                 except RuntimeError:
                     body = "[响应内容不可读取]"
-        log_line("响应状态:", response.status)
-        log_line("响应内容:", body)
+
+        log_line(f"{now()} 响应状态: {response.status}")
+        log_line(f"{now()} 响应内容: {body}")
         return response
-    # 蓝图
+
+    # 注册蓝图
     register_blueprints(app)
 
     # CORS
-    CORS(app, resources=r'/*')
+    CORS(app, resources=r"/*")
+
     return app
 
 
+# ==================================================
+# 主运行入口
+# ==================================================
 app = create_app()
 
 if IS_DEV:
