@@ -138,6 +138,3 @@ def create_app() -> Flask:
 # 主运行入口
 # ==================================================
 app = create_app()
-
-if IS_DEV:
-    app.run(host="0.0.0.0", port=5001, debug=True)
