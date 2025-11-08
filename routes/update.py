@@ -1,10 +1,30 @@
 import os
-
+import json
 from flask import Blueprint, jsonify, send_from_directory
 
 bp = Blueprint("update", __name__)
 
 APK_DIR = "apks"
+CONFIG_FILE = "update_config.json"
+
+
+def load_config():
+    """读取本地配置文件"""
+    default = {
+        "silent": 0,
+        "force": 1,
+        "net_check": 0,
+        "note": ""
+    }
+    if not os.path.exists(CONFIG_FILE):
+        return default
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            default.update(data)
+    except Exception:
+        pass
+    return default
 
 
 def parse_version(filename: str):
@@ -43,24 +63,19 @@ def find_latest_file():
 @bp.route("/api/check_update", methods=["GET"])
 def check_update():
     """返回最大版本号的文件信息"""
+    config = load_config()
     latest = find_latest_file()
     if not latest:
         return jsonify({
             "version": "0.0.0",
             "now_url": "",
-            "silent": 1,
-            "force": 1,
-            "net_check": 0,
-            "note": ""
+            **config
         })
 
     return jsonify({
         "version": latest["version"],
         "now_url": f"/api/download/{latest['filename']}",
-        "silent": 1,
-        "force": 1,
-        "net_check": 0,
-        "note": ""
+        **config
     })
 
 
