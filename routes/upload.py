@@ -3,6 +3,7 @@ import random
 import tempfile
 from datetime import datetime, timedelta
 
+import PIL.Image
 from flask import Blueprint, jsonify, request
 
 from apis.immich_api import IMMICHApi
@@ -69,6 +70,10 @@ def upload_with_watermark():
             os.close(fd)
             f.save(ori)
             temps.append(ori)
+
+            pc = PIL.Image.open(ori)
+            pc.save(ori, quality=70, optimize=True)
+            pc.close()
 
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = generate_random_suffix()
