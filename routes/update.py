@@ -48,7 +48,7 @@ def check_update():
         return jsonify({
             "version": "0.0.0",
             "now_url": "",
-            "silent": 0,
+            "silent": 1,
             "force": 1,
             "net_check": 0,
             "note": ""
@@ -57,7 +57,7 @@ def check_update():
     return jsonify({
         "version": latest["version"],
         "now_url": f"/api/download/{latest['filename']}",
-        "silent": 0,
+        "silent": 1,
         "force": 1,
         "net_check": 0,
         "note": ""
