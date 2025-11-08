@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
+from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord
 from utils.generate_water_mark import add_watermark_to_image
-from utils.immich import upload_to_immich_file
 from utils.logger import log_line
 from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url
@@ -132,7 +132,8 @@ def upload_to_gallery():
             file.save(tmp.name)
             tmp_path = tmp.name
 
-        result = upload_to_immich_file(tmp_path)
+        immich_api = IMMICHApi()
+        asset_id = immich_api.upload_to_immich_file(tmp_path)
         os.remove(tmp_path)
 
         # 保存简要记录
@@ -145,8 +146,8 @@ def upload_to_gallery():
             height=500,
         )
 
-        if isinstance(result, dict) and result.get("error"):
-            return jsonify({"success": False, "error": result.get("message")}), 500
+        if not asset_id:
+            return jsonify({"success": False, "error": "文件保存失败"}), 500
         return jsonify({"success": True, "message": "文件已成功保存"})
 
     except Exception as e:
