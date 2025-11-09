@@ -153,7 +153,7 @@ def upload_to_gallery():
 
         if not asset_id:
             return jsonify({"success": False, "error": "文件保存失败"}), 500
-        return jsonify({"success": True, "message": "文件已成功保存"})
+        return jsonify({"success": True, "asset_id": asset_id, "message": "文件保存成功"})
 
     except Exception as e:
         import traceback

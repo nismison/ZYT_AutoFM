@@ -2,13 +2,16 @@ import datetime
 import subprocess
 
 # 项目目录
+from db import ensure_tables
+from utils.logger import log_line
+
 chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
 # 指定进程数
-workers = 5
+workers = 4
 
 # 指定每个进程开启的线程数
-threads = 5
+threads = 4
 
 # 启动用户
 user = 'www'
@@ -46,29 +49,13 @@ loglevel = 'info'
 
 
 def on_starting(server):
-    """
-    仅在 Gunicorn master 启动时执行一次，
-    拉取最新代码并把日志写入 errorlog 文件。
-    """
+    # """
+    # 拉取最新代码
+    # """
     repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
     cmd = f"cd {repo_path} && git pull"
 
-    # 获取 gunicorn_conf.py 中定义的 errorlog 路径
-    log_path = globals().get("errorlog", "/tmp/git_pull_fallback.log")
-
-    def append_log(message: str):
-        """向 errorlog 追加日志行"""
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[{timestamp}] [GIT_PULL] {message}\n"
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(line)
-        except Exception as e:
-            # 如果写入失败，写到系统临时目录兜底
-            with open("/tmp/git_pull_fallback.log", "a", encoding="utf-8") as f:
-                f.write(f"{line} (fallback due to error: {e})\n")
-
-    append_log("🚀 Gunicorn Master 启动中：开始检测并拉取最新代码 ...")
+    log_line("🚀 Gunicorn Master 启动中：开始检测并拉取最新代码 ...")
 
     try:
         result = subprocess.run(
@@ -83,14 +70,19 @@ def on_starting(server):
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            append_log(f"❌ Git 拉取失败：{stderr or stdout}")
+            log_line(f"❌ Git 拉取失败：{stderr or stdout}")
         else:
             if "Already up to date" in stdout or "已经是最新的" in stdout:
-                append_log("✅ 代码已是最新，无需更新")
+                log_line("✅ 代码已是最新，无需更新")
             else:
-                append_log("✅ Git 拉取成功：")
-                append_log(stdout)
+                log_line("✅ Git 拉取成功：")
+                log_line(stdout)
     except subprocess.TimeoutExpired:
-        append_log("⚠️ Git 拉取超时，跳过更新")
+        log_line("⚠️ Git 拉取超时，跳过更新")
     except Exception as e:
-        append_log(f"❌ 拉取更新时出现异常：{e}")
+        log_line(f"❌ 拉取更新时出现异常：{e}")
+
+    # """
+    # 初始化数据表
+    # """
+    ensure_tables()

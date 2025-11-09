@@ -47,10 +47,8 @@ class IMMICHApi:
 
         try:
             resp = requests.post(f"{IMMICH_URL}/assets", headers=self.headers, data=data, files=files)
-            print(f">>>>>>>>>>resp.text: {resp.text}<<<<<<<<<<")
             try:
                 resp_json = resp.json()
-                print(f">>>>>>>>>>resp_json: {resp_json}<<<<<<<<<<")
                 return resp_json.get("id", None)
             except Exception:
                 return None

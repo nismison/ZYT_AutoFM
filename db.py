@@ -50,6 +50,9 @@ def init_database_connection():
 
 def ensure_tables():
     """确保表结构存在"""
-    init_database_connection()
-    _db.create_tables([UploadRecord], safe=True)
-    log_line("[主进程] 数据库表结构检查完成")
+    try:
+        init_database_connection()
+        _db.create_tables([UploadRecord], safe=True)
+        log_line("[主进程] 数据库表结构初始化完成")
+    except Exception as e:
+        log_line(f"[Gunicorn] 数据库表结构初始化失败: {e}")
