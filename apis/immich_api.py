@@ -31,13 +31,13 @@ class IMMICHApi:
     def upload_to_immich_file(self, file_path: str):
         """上传文件到 Immich"""
         stats = os.stat(file_path)
-        file_created = datetime.fromtimestamp(stats.st_mtime).isoformat()
+        current_time = datetime.now().isoformat()
 
         data = {
             'deviceAssetId': f"{os.path.basename(file_path)}-{stats.st_mtime}",
             'deviceId': 'python',
-            'fileCreatedAt': file_created,
-            'fileModifiedAt': file_created,
+            'fileCreatedAt': current_time,
+            'fileModifiedAt': current_time,
             'isFavorite': 'false',
         }
 
