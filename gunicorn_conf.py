@@ -81,8 +81,3 @@ def on_starting(server):
         log_line("⚠️ Git 拉取超时，跳过更新")
     except Exception as e:
         log_line(f"❌ 拉取更新时出现异常：{e}")
-
-    # """
-    # 初始化数据表
-    # """
-    ensure_tables()

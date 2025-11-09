@@ -73,7 +73,8 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     # 初始化数据库连接
-    init_database_connection()
+    with app.app_context():
+        init_database_connection()
 
     @app.before_request
     def log_request():
