@@ -50,15 +50,15 @@ def proxy(subpath):
                 ok = ql.update_env("ZYT_TOKEN", access_token)
                 Notify().send(f"Token更新{'成功' if ok else '失败'}: ...{access_token[-10:] if access_token else ''}")
 
-        if original_path == "galaxy/api/app/staff/favorite/module":
-            try:
-                data = resp.json() or {}
-                for item in data["result"] or []:
-                    if "百川工单" in item["name"]:
-                        item["action_id"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
-                        item["action_url"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
-                return jsonify(data), resp.status_code, out_headers
-            except Exception:
-                pass
+        # if original_path == "galaxy/api/app/staff/favorite/module":
+        #     try:
+        #         data = resp.json() or {}
+        #         for item in data["result"] or []:
+        #             if "百川工单" in item["name"]:
+        #                 item["action_id"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
+        #                 item["action_url"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
+        #         return jsonify(data), resp.status_code, out_headers
+        #     except Exception:
+        #         pass
 
     return Response(resp.content, resp.status_code, out_headers)
