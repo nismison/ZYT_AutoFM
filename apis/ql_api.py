@@ -1,14 +1,16 @@
 import requests
 
+from config import QL_BASE_URL, QL_CLIENT_ID, QL_CLIENT_SECRET
+
 
 class QLApi:
-    def __init__(self, base_url="http://ql.zytsy.icu", client_id="i-v-Y0pCCP1m", client_secret="l0_EIhFAT-m2EkvA3IdK3L6I"):
+    def __init__(self):
         """
         初始化时获取 QL token
         """
-        self.base_url = base_url.rstrip('/')
-        self.client_id = client_id
-        self.client_secret = client_secret
+        self.base_url = QL_BASE_URL.rstrip('/')
+        self.client_id = QL_CLIENT_ID
+        self.client_secret = QL_CLIENT_SECRET
         self.token = None
         self.token_type = None
         self.get_ql_token()
@@ -26,6 +28,10 @@ class QLApi:
         if data.get("code") == 200 and "data" in data:
             self.token = data["data"]["token"]
             self.token_type = data["data"]["token_type"]
+
+            print(f"{'=' * 25} 青龙token {'=' * 25}")
+            print(self.token)
+            print("=" * 60)
         else:
             raise Exception(f"获取QL token失败: {data}")
 
