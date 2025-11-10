@@ -9,6 +9,7 @@ IS_DEV = os.getenv("ENV") == "dev"
 
 # ==================== 自动工单配置 ====================
 BASE_URL = f"http://{get_real_lan_ip()}:5001" if IS_DEV else "https://api.zytsy.icu"
+BAICHUAN_PROXY_URL = f"http://{get_real_lan_ip()}:8000" if IS_DEV else "https://baichuan.zytsy.icu"
 # 基础 Token (从环境变量读取)
 BASIC_TOKEN = os.getenv("ZYT_TOKEN", "")
 
