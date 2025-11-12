@@ -125,3 +125,7 @@ def test_upload_with_watermark_and_qrcode(merge):
             print(f"[OK] 二维码验证通过 → n={n}, s={s}")
 
     print(f"[SUCCESS] merge={merge} 测试通过 ✅ 共验证 {len(oss_urls)} 张图片。")
+
+
+if __name__ == "__main__":
+    pytest.main(["-v", "-s", __file__])
