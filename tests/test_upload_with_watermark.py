@@ -13,12 +13,12 @@ from utils.crypter import decrypt_with_string_key  # ✅ 你的解密方法
 TEST_URL = f"{BASE_URL}/upload_with_watermark"
 
 
-def generate_test_image(text: str, size=(600, 400), color=(80, 140, 220)):
+def generate_test_image(text: str, size=(200, 400), color=(80, 140, 220)):
     """生成一张带文字的测试图片（保存在内存）"""
     img = Image.new("RGB", size, color=color)
     draw = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype("arial.ttf", 32)
+        font = ImageFont.truetype("static/siyuansongti.ttf", 32)
     except Exception:
         font = ImageFont.load_default()
     draw.text((20, 20), text, fill="white", font=font)

@@ -22,7 +22,7 @@ def test_image():
     draw = ImageDraw.Draw(img)
     text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        font = ImageFont.truetype("arial.ttf", 32)
+        font = ImageFont.truetype("static/siyuansongti.ttf", 32)
     except Exception:
         font = ImageFont.load_default()
 
