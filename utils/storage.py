@@ -1,6 +1,10 @@
 import os
 import random
 import string
+from datetime import datetime
+
+from PIL import Image, ExifTags
+
 from config import BASE_URL
 
 
@@ -26,3 +30,23 @@ def get_random_template_file(category, sub_category=None):
              if os.path.isfile(os.path.join(target_dir, f)) and not f.startswith('.')]
 
     return os.path.join(target_dir, random.choice(files)) if files else None
+
+
+def update_exif_datetime(image_path: str):
+    """用 Pillow 修改 JPEG 图片 EXIF 时间为当前时间"""
+    try:
+        img = Image.open(image_path)
+        exif = img.getexif()
+        now_str = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+
+        # 找到 DateTime、DateTimeOriginal、DateTimeDigitized 的 tag ID
+        TAGS = {v: k for k, v in ExifTags.TAGS.items()}
+        for tag_name in ["DateTime", "DateTimeOriginal", "DateTimeDigitized"]:
+            tag_id = TAGS.get(tag_name)
+            if tag_id:
+                exif[tag_id] = now_str
+
+        img.save(image_path, exif=exif)
+        print(f"EXIF 时间更新为 {now_str}")
+    except Exception as e:
+        print(f"EXIF 更新时间失败: {e}")
