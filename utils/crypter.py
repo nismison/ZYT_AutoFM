@@ -35,14 +35,14 @@ def generate_random_coordinates():
     }
 
 
-def decrypt_with_string_key(encrypted_b64, key_str):
+def decrypt_with_string_key(encrypted_b64):
     """
     使用字符串直接作为密钥进行解密
     """
     try:
         # 密钥就是UTF-8字符串
-        key_bytes = key_str.encode('utf-8')
-        print(f"密钥字符串: '{key_str}'")
+        key_bytes = AES_KEY.encode('utf-8')
+        print(f"密钥字符串: '{AES_KEY}'")
         print(f"密钥字节长度: {len(key_bytes)}")
 
         # Base64解码
