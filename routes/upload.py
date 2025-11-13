@@ -2,9 +2,11 @@ import os
 import random
 import tempfile
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 import PIL.Image
 from flask import Blueprint, jsonify, request
+from werkzeug.utils import secure_filename
 
 from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
@@ -131,21 +133,37 @@ def upload_to_gallery():
         if not all([file, etag]):
             return jsonify({"error": "缺少必要参数(file, etag)"}), 400
 
-        # 保留扩展名
-        suffix = os.path.splitext(file.filename)[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            file.save(tmp.name)
-            tmp_path = tmp.name
+        # 原文件名（安全）
+        original_filename = secure_filename(file.filename)
+        suffix = os.path.splitext(original_filename)[1].lower()
 
-        # 修改 EXIF 时间
-        if suffix.lower() in ['.jpg', '.jpeg']:
+        # 缓存目录（保证可用）
+        cache_dir = "/tmp/upload_cache"
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+        except Exception as e:
+            return jsonify({"error": f'创建缓存目录失败: {e}'}), 500
+
+        # 生成唯一文件名
+        unique_name = f"{uuid4().hex}_{original_filename}"
+        tmp_path = os.path.join(cache_dir, unique_name)
+
+        # 保存文件
+        file.save(tmp_path)
+
+        # 修改 EXIF（保持你原来的逻辑）
+        if suffix in ['.jpg', '.jpeg']:
             update_exif_datetime(tmp_path)
 
         immich_api = IMMICHApi()
         asset_id = immich_api.upload_to_immich_file(tmp_path)
-        os.remove(tmp_path)
 
-        # 保存简要记录
+        # 清理缓存
+        try:
+            os.remove(tmp_path)
+        except FileNotFoundError:
+            pass
+
         UploadRecord.create(
             oss_url='oss_url',
             file_size=100,
@@ -157,6 +175,7 @@ def upload_to_gallery():
 
         if not asset_id:
             return jsonify({"success": False, "error": "文件保存失败"}), 500
+
         return jsonify({"success": True, "asset_id": asset_id, "message": "文件保存成功"})
 
     except Exception as e:

@@ -13,3 +13,4 @@
 /.env
 /gunicorn_error.log
 /test.py
+/tmp/
