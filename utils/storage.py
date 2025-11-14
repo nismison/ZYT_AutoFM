@@ -102,3 +102,20 @@ def fix_video_metadata(src_path: str, dst_path: str) -> None:
         raise RuntimeError(
             f"ffmpeg 修改视频 metadata 失败: {proc.stderr.decode(errors='ignore')}"
         )
+
+
+def find_review_dir_by_filename(filename):
+    """
+    在 pending 下递归查找文件名，并返回该文件所在的目录绝对路径。
+
+    :param filename: 文件名，例如 "8ac82f3aa9d8c1bd91e.jpg"
+    :returns: 目录绝对路径，如 "storage/reviews/pending/aaa/bbb"
+    :raises FileNotFoundError: 没找到对应文件时抛错
+    """
+    base = os.path.join("storage", "reviews", "pending")
+
+    for root, dirs, files in os.walk(base):
+        if filename in files:
+            return root
+
+    raise FileNotFoundError(f"未找到文件: {filename}")

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <title>待审核列表</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 18px;
+            border-radius: 6px;
+        }
+
+        .row {
+            display: flex;
+            align-items: flex-start;
+        }
+
+        img {
+            width: 150px;
+            height: auto;
+            margin-right: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            margin-right: 8px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .approve {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .reject {
+            background: #E74C3C;
+            color: white;
+        }
+
+        .path {
+            margin-top: 8px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>待审核文件</h2>
+<div id="list"></div>
+
+<script>
+async function loadPending() {
+    const res = await fetch('/api/review/pending-list');
+    const data = await res.json();
+
+    const container = document.getElementById('list');
+    container.innerHTML = '';
+
+    data.list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.id = "item-" + item.filename;
+
+        div.innerHTML = `
+            <div class="row">
+                <img src="/api/image/reviews/${item.relative_path}" alt="">
+                <div>
+                    <div class="title">${item.filename}</div>
+
+                    <div class="path">业务路径：${item.file_path}</div>
+                    <div class="path">目录：${item.dir}</div>
+
+                    <button class="btn approve" onclick="approve('${item.filename}')">通过</button>
+                    <button class="btn reject" onclick="rejectFile('${item.filename}')">拒绝</button>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(div);
+    });
+}
+
+async function approve(filename) {
+    const res = await fetch('/api/review/approve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename})
+    });
+
+    const data = await res.json();
+    if (data.msg === "ok") {
+        document.getElementById("item-" + filename).remove();
+    } else {
+        alert("错误：" + data.error);
+    }
+}
+
+async function rejectFile(filename) {
+    const res = await fetch('/api/review/reject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename})
+    });
+
+    const data = await res.json();
+    if (data.msg === "ok") {
+        document.getElementById("item-" + filename).remove();
+    } else {
+        alert("错误：" + data.error);
+    }
+}
+
+loadPending();
+</script>
+
+</body>
+</html>
