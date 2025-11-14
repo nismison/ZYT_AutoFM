@@ -97,8 +97,8 @@ def create_app() -> Flask:
             body = summarize_by_type(content_type, data)
 
         log_line("=" * 60)
-        log_line(f"{now()} 请求路径: {request.path}")
-        log_line(f"{now()} 请求数据: {body}")
+        log_line(f"请求路径: {request.path}")
+        log_line(f"请求数据: {body}")
 
     @app.after_request
     def log_response(response):
@@ -122,8 +122,8 @@ def create_app() -> Flask:
                 except RuntimeError:
                     body = "[响应内容不可读取]"
 
-        log_line(f"{now()} 响应状态: {response.status}")
-        log_line(f"{now()} 响应内容: {body}")
+        log_line(f"响应状态: {response.status}")
+        log_line(f"响应内容: {body}")
         return response
 
     # 注册蓝图
