@@ -153,13 +153,13 @@ def upload_to_gallery():
             update_exif_datetime(tmp_path)
 
         # 修改视频 metadata（创建时间 + 修改时间）
-        elif suffix in ['.mp4', '.mov', '.mkv', '.avi']:
-            fixed_path = tmp_path + "_fixed" + suffix
-            fix_video_metadata(tmp_path, fixed_path)
-
-            # 用修改后的覆盖
-            os.remove(tmp_path)
-            tmp_path = fixed_path
+        # elif suffix in ['.mp4', '.mov', '.mkv', '.avi']:
+        #     fixed_path = tmp_path + "_fixed" + suffix
+        #     fix_video_metadata(tmp_path, fixed_path)
+        #
+        #     # 用修改后的覆盖
+        #     os.remove(tmp_path)
+        #     tmp_path = fixed_path
 
         immich_api = IMMICHApi()
         asset_id = immich_api.upload_to_immich_file(tmp_path)
