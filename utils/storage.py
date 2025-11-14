@@ -54,34 +54,20 @@ def update_exif_datetime(image_path: str):
 
 
 def fix_video_metadata(src_path: str, dst_path: str):
-    """
-    使用 ffmpeg 重写视频 metadata（creation_time、modify_time 等）
-    说明：
-        - 仅重写容器层 metadata，视频流不重新编码（速度快）
-        - Immich 会优先读取 creation_time
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    """使用 ffmpeg 重写视频 metadata（带时区），解决 UTC 偏移问题"""
+    # 生成带时区的时间（关键）
+    timestamp = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
 
-    # 写入常见的 Metadata 字段（一次性覆盖全部）
     metadata_args = [
         "-metadata", f"creation_time={timestamp}",
         "-metadata", f"com.apple.quicktime.creationdate={timestamp}",
         "-metadata", f"com.apple.quicktime.modificationdate={timestamp}",
         "-metadata", f"modify_time={timestamp}",
-        "-metadata", f"date={timestamp}"
+        "-metadata", f"date={timestamp}",
     ]
 
-    cmd = [
-        "ffmpeg",
-        "-i", src_path,
-        *metadata_args,
-        "-codec", "copy",
-        dst_path
-    ]
+    cmd = ["ffmpeg", "-i", src_path, *metadata_args, "-codec", "copy", dst_path]
 
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"修改视频 metadata 失败:\n{proc.stderr.decode(errors='ignore')}"
-        )
+        raise RuntimeError(proc.stderr.decode(errors='ignore'))
