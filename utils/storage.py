@@ -9,6 +9,19 @@ from PIL import Image, ExifTags
 from config import BASE_URL
 
 
+def get_local_iso8601():
+    """
+    返回带时区并带冒号的 ISO8601 时间，例如：
+    2025-11-13T10:20:00+08:00
+    """
+    now = datetime.now().astimezone()
+    # 先拿到 +0800
+    tz_raw = now.strftime("%z")  # "+0800"
+    # 插入冒号 → "+08:00"
+    tz_fixed = tz_raw[:3] + ":" + tz_raw[3:]
+    return now.strftime("%Y-%m-%dT%H:%M:%S") + tz_fixed
+
+
 def generate_random_suffix(length: int = 8) -> str:
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
@@ -54,9 +67,7 @@ def update_exif_datetime(image_path: str):
 
 
 def fix_video_metadata(src_path: str, dst_path: str):
-    """使用 ffmpeg 重写视频 metadata（带时区），解决 UTC 偏移问题"""
-    # 生成带时区的时间（关键）
-    timestamp = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+    timestamp = get_local_iso8601()
 
     metadata_args = [
         "-metadata", f"creation_time={timestamp}",
