@@ -66,19 +66,43 @@ def update_exif_datetime(image_path: str):
         print(f"EXIF 更新时间失败: {e}")
 
 
-def fix_video_metadata(src_path: str, dst_path: str):
-    timestamp = get_local_iso8601()
+def fix_video_metadata(src_path: str, dst_path: str) -> None:
+    """
+    使用 ffmpeg 重写视频的时间类 metadata 字段（容器层 + 视频流 + 音频流）
+    保证 Immich 优先读取的 creation_time 字段包含正确的本地时区信息
 
-    metadata_args = [
+    :param src_path: 源视频文件路径
+    :param dst_path: 写入修改后视频文件的目标路径（若已存在将被覆盖）
+    :returns: None，本函数执行成功后会在 dst_path 生成带新 metadata 的视频文件
+    :raises RuntimeError: 当 ffmpeg 执行失败或返回码非 0 时抛出异常
+    """
+    # 使用当前本地时区，生成带偏移的 ISO8601 时间，例如 2025-11-14T10:37:00+08:00
+    now = datetime.now().astimezone()
+    timestamp = now.isoformat(timespec="seconds")
+
+    cmd = [
+        "ffmpeg",
+        "-i", src_path,
+
+        # 容器层时间字段
         "-metadata", f"creation_time={timestamp}",
-        "-metadata", f"com.apple.quicktime.creationdate={timestamp}",
-        "-metadata", f"com.apple.quicktime.modificationdate={timestamp}",
-        "-metadata", f"modify_time={timestamp}",
         "-metadata", f"date={timestamp}",
-    ]
 
-    cmd = ["ffmpeg", "-i", src_path, *metadata_args, "-codec", "copy", dst_path]
+        # 视频流（第 0 路）时间字段
+        "-metadata:s:v:0", f"creation_time={timestamp}",
+        "-metadata:s:v:0", f"com.apple.quicktime.creationdate={timestamp}",
+
+        # 音频流（第 0 路）时间字段
+        "-metadata:s:a:0", f"creation_time={timestamp}",
+        "-metadata:s:a:0", f"com.apple.quicktime.creationdate={timestamp}",
+
+        # 不重编码，仅重写容器及 metadata
+        "-codec", "copy",
+        dst_path,
+    ]
 
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.decode(errors='ignore'))
+        raise RuntimeError(
+            f"修改视频 metadata 失败: {proc.stderr.decode(errors='ignore')}"
+        )
