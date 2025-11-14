@@ -14,7 +14,7 @@ from db import UploadRecord
 from utils.generate_water_mark import add_watermark_to_image
 from utils.logger import log_line
 from utils.merge import merge_images_grid
-from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime
+from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, fix_video_metadata
 
 bp = Blueprint("upload", __name__)
 
@@ -133,16 +133,13 @@ def upload_to_gallery():
         if not all([file, etag]):
             return jsonify({"error": "缺少必要参数(file, etag)"}), 400
 
-        # 原文件名（安全）
+        # 原文件名
         original_filename = secure_filename(file.filename)
         suffix = os.path.splitext(original_filename)[1].lower()
 
-        # 缓存目录（保证可用）
+        # 缓存目录
         cache_dir = "/tmp/upload_cache"
-        try:
-            os.makedirs(cache_dir, exist_ok=True)
-        except Exception as e:
-            return jsonify({"error": f'创建缓存目录失败: {e}'}), 500
+        os.makedirs(cache_dir, exist_ok=True)
 
         # 生成唯一文件名
         unique_name = f"{uuid4().hex}_{original_filename}"
@@ -151,9 +148,18 @@ def upload_to_gallery():
         # 保存文件
         file.save(tmp_path)
 
-        # 修改 EXIF（保持你原来的逻辑）
+        # 修改图片 EXIF
         if suffix in ['.jpg', '.jpeg']:
             update_exif_datetime(tmp_path)
+
+        # 修改视频 metadata（创建时间 + 修改时间）
+        elif suffix in ['.mp4', '.mov', '.mkv', '.avi']:
+            fixed_path = tmp_path + "_fixed" + suffix
+            fix_video_metadata(tmp_path, fixed_path)
+
+            # 用修改后的覆盖
+            os.remove(tmp_path)
+            tmp_path = fixed_path
 
         immich_api = IMMICHApi()
         asset_id = immich_api.upload_to_immich_file(tmp_path)
