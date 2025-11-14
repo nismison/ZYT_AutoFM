@@ -68,31 +68,32 @@ def update_exif_datetime(image_path: str):
 
 def fix_video_metadata(src_path: str, dst_path: str) -> None:
     """
-    重写视频 metadata，使 Immich 能正确识别本地时区时间。
-    方案：清除所有 Stream 层的 creation_time，强制 Immich fallback
-         到 Container 层的 creation_time（可写入带时区信息）
+    去除所有 Stream 层 creation_time，并写入带时区的容器层 creation_time，
+    确保 Immich 使用本地时区(+08:00)而不是 UTC。
 
-    :param src_path: 输入视频路径
-    :param dst_path: 输出视频路径
+    :param src_path: 输入视频文件
+    :param dst_path: 输出视频文件（写入新 metadata 后）
     :returns: None
-    :raises RuntimeError: ffmpeg 执行失败时抛出
+    :raises RuntimeError: ffmpeg 执行失败时抛出异常
     """
     now = datetime.now().astimezone()
-    timestamp = now.isoformat(timespec="seconds")
+    timestamp = now.isoformat(timespec="seconds")  # 例如 2025-11-14T12:43:49+08:00
 
     cmd = [
         "ffmpeg",
         "-i", src_path,
 
-        # 删除 Stream 层 creation_time（关键）
-        "-metadata:s:v:0", "creation_time=",
-        "-metadata:s:a:0", "creation_time=",
+        # 删除所有 metadata（关键，必须保留）
+        "-map", "0",
+        "-map_metadata", "-1",
 
-        # Container 层写入带时区时间
+        # 写入容器层 metadata（Immich 会使用这个）
         "-metadata", f"creation_time={timestamp}",
         "-metadata", f"date={timestamp}",
 
-        "-codec", "copy",
+        # 不重编码（极快）
+        "-c", "copy",
+
         dst_path,
     ]
 
