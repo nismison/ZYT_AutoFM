@@ -68,15 +68,15 @@ def update_exif_datetime(image_path: str):
 
 def fix_video_metadata(src_path: str, dst_path: str) -> None:
     """
-    使用 ffmpeg 重写视频的时间类 metadata 字段（容器层 + 视频流 + 音频流）
-    保证 Immich 优先读取的 creation_time 字段包含正确的本地时区信息
+    重写视频 metadata，使 Immich 能正确识别本地时区时间。
+    方案：清除所有 Stream 层的 creation_time，强制 Immich fallback
+         到 Container 层的 creation_time（可写入带时区信息）
 
-    :param src_path: 源视频文件路径
-    :param dst_path: 写入修改后视频文件的目标路径（若已存在将被覆盖）
-    :returns: None，本函数执行成功后会在 dst_path 生成带新 metadata 的视频文件
-    :raises RuntimeError: 当 ffmpeg 执行失败或返回码非 0 时抛出异常
+    :param src_path: 输入视频路径
+    :param dst_path: 输出视频路径
+    :returns: None
+    :raises RuntimeError: ffmpeg 执行失败时抛出
     """
-    # 使用当前本地时区，生成带偏移的 ISO8601 时间，例如 2025-11-14T10:37:00+08:00
     now = datetime.now().astimezone()
     timestamp = now.isoformat(timespec="seconds")
 
@@ -84,19 +84,14 @@ def fix_video_metadata(src_path: str, dst_path: str) -> None:
         "ffmpeg",
         "-i", src_path,
 
-        # 容器层时间字段
+        # 删除 Stream 层 creation_time（关键）
+        "-metadata:s:v:0", "creation_time=",
+        "-metadata:s:a:0", "creation_time=",
+
+        # Container 层写入带时区时间
         "-metadata", f"creation_time={timestamp}",
         "-metadata", f"date={timestamp}",
 
-        # 视频流（第 0 路）时间字段
-        "-metadata:s:v:0", f"creation_time={timestamp}",
-        "-metadata:s:v:0", f"com.apple.quicktime.creationdate={timestamp}",
-
-        # 音频流（第 0 路）时间字段
-        "-metadata:s:a:0", f"creation_time={timestamp}",
-        "-metadata:s:a:0", f"com.apple.quicktime.creationdate={timestamp}",
-
-        # 不重编码，仅重写容器及 metadata
         "-codec", "copy",
         dst_path,
     ]
@@ -104,5 +99,5 @@ def fix_video_metadata(src_path: str, dst_path: str) -> None:
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
         raise RuntimeError(
-            f"修改视频 metadata 失败: {proc.stderr.decode(errors='ignore')}"
+            f"ffmpeg 修改视频 metadata 失败: {proc.stderr.decode(errors='ignore')}"
         )
