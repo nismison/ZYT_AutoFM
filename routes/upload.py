@@ -14,7 +14,7 @@ from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord
 from utils.generate_water_mark import add_watermark_to_image
 from utils.logger import log_line
-from utils.merge import merge_images_grid
+from utils.merge import merge_images_grid, resize_image_limit
 from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, fix_video_metadata, \
     find_review_dir_by_filename
 
@@ -101,6 +101,7 @@ def upload_with_watermark():
         # 合并
         if merge and len(result_paths) > 1:
             merged = merge_images_grid([p for _, p in result_paths])
+            merged = resize_image_limit(merged, max_w=1080, max_h=1920)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = generate_random_suffix()
             merged_id = f"{user_number}_{ts}_{suffix}_merged"

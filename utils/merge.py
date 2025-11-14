@@ -49,3 +49,28 @@ def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 
         y += row[0].height + padding
 
     return canvas
+
+
+def resize_image_limit(img, max_w=1080, max_h=1920):
+    """
+    限制图片最大宽高，保持原比例，不裁剪
+
+    :param img: PIL Image对象
+    :param max_w: 最大宽度
+    :param max_h: 最大高度
+    :returns: 调整后的PIL Image对象
+    :raises KeyError: 无
+    """
+    ow, oh = img.size
+
+    # 计算限制比例
+    ratio_w = max_w / ow
+    ratio_h = max_h / oh
+    ratio = min(ratio_w, ratio_h, 1.0)  # 不放大，只缩小
+
+    if ratio >= 1.0:
+        return img  # 尺寸本来就合规
+
+    new_w = int(ow * ratio)
+    new_h = int(oh * ratio)
+    return img.resize((new_w, new_h), Image.LANCZOS)
