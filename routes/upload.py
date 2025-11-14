@@ -85,7 +85,8 @@ def upload_with_watermark():
             out_file = os.path.join(WATERMARK_STORAGE_DIR, f"{image_id}.jpg")
 
             # 每张 +1~2 分钟
-            curr += timedelta(minutes=random.randint(1, 2))
+            if len(result_paths):
+                curr += timedelta(minutes=random.randint(1, 2))
             tstr = curr.strftime("%H:%M")
 
             add_watermark_to_image(
