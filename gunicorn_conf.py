@@ -49,13 +49,25 @@ loglevel = 'info'
 
 
 def on_starting(server):
-    # """
-    # 拉取最新代码
-    # """
-    repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
-    cmd = f"cd {repo_path} && git pull"
+    """
+    Gunicorn 启动时强制拉取最新代码，丢弃本地修改。
 
-    log_line("🚀 Gunicorn Master 启动中：开始检测并拉取最新代码 ...")
+    :param server: Gunicorn server 对象
+    :returns: None
+    :raises keyError: 无
+    """
+    repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
+
+    # 强制覆盖本地的标准命令组合
+    cmd = (
+        f"cd {repo_path} && "
+        "git reset --hard HEAD && "
+        "git clean -fd && "
+        "git fetch --all && "
+        "git reset --hard origin/master"
+    )
+
+    log_line("🚀 Gunicorn Master 启动：强制同步最新代码（丢弃本地修改）...")
 
     try:
         result = subprocess.run(
@@ -66,18 +78,19 @@ def on_starting(server):
             text=True,
             timeout=30
         )
+
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            log_line(f"❌ Git 拉取失败：{stderr or stdout}")
+            log_line(f"❌ Git 强制拉取失败：{stderr or stdout}")
         else:
-            if "Already up to date" in stdout or "已经是最新的" in stdout:
-                log_line("✅ 代码已是最新，无需更新")
-            else:
-                log_line("✅ Git 拉取成功：")
+            log_line("✅ 代码已成功强制同步至最新版本")
+            if stdout:
                 log_line(stdout)
+
     except subprocess.TimeoutExpired:
         log_line("⚠️ Git 拉取超时，跳过更新")
+
     except Exception as e:
-        log_line(f"❌ 拉取更新时出现异常：{e}")
+        log_line(f"❌ 强制拉取更新出现异常：{e}")
