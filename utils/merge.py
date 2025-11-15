@@ -1,54 +1,71 @@
+import cv2
+import numpy as np
 from PIL import Image
-import math
 
 
 def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 255, 255)):
     """
-    自适应拼贴图布局（不留白，不强制相同尺寸）
-    - 自动按行填充，总宽一致
-    - 行内按宽高比缩放
+    numpy 加速版多图拼接（自适应网格）
     """
-    images = [Image.open(p).convert("RGB") for p in image_paths]
-    n = len(images)
+    pil_images = [Image.open(p).convert("RGB") for p in image_paths]
+    imgs = [np.array(img) for img in pil_images]
+    n = len(imgs)
+
     if n == 0:
         raise ValueError("No images provided")
 
-    cols = math.ceil(math.sqrt(n))
-    rows = math.ceil(n / cols)
+    cols = int(np.ceil(np.sqrt(n)))
+    rows = int(np.ceil(n / cols))
 
     groups = []
     idx = 0
     for _ in range(rows):
         remain = n - idx
         count = min(cols, remain)
-        groups.append(images[idx:idx + count])
+        groups.append(imgs[idx: idx + count])
         idx += count
 
+    resized_rows = []
     total_h = 0
-    row_scaled = []
+
     for row_imgs in groups:
-        ratios = [img.width / img.height for img in row_imgs]
+        ratios = [img.shape[1] / img.shape[0] for img in row_imgs]  # w/h
         total_ratio = sum(ratios)
         row_h = int(target_width / total_ratio)
-        scaled = []
+
+        scaled_row = []
         for img, r in zip(row_imgs, ratios):
             new_w = int(row_h * r)
-            scaled.append(img.resize((new_w, row_h)))
-        row_scaled.append(scaled)
+            resized = cv2.resize(img, (new_w, row_h))
+            scaled_row.append(resized)
+
+        row_w = sum(im.shape[1] for im in scaled_row) + padding * (len(scaled_row) - 1)
+        row_canvas = np.full((row_h, row_w, 3), bg_color, dtype=np.uint8)
+
+        x = 0
+        for im in scaled_row:
+            h, w = im.shape[0], im.shape[1]
+            row_canvas[0:h, x: x + w] = im
+            x += w + padding
+
+        resized_rows.append(row_canvas)
         total_h += row_h + padding
 
-    canvas = Image.new("RGB", (target_width, total_h - padding), bg_color)
+    total_h -= padding
+    canvas = np.full((total_h, target_width, 3), bg_color, dtype=np.uint8)
 
     y = 0
-    for row in row_scaled:
-        x = 0
-        for img in row:
-            canvas.paste(img, (x, y))
-            x += img.width + padding
-            img.close()
-        y += row[0].height + padding
+    for row in resized_rows:
+        h, w = row.shape[0], row.shape[1]
+        if w > target_width:
+            row = cv2.resize(row, (target_width, h))
 
-    return canvas
+        cw = row.shape[1]
+        offset = (target_width - cw) // 2
+        canvas[y:y + h, offset:offset + cw] = row
+        y += h + padding
+
+    return Image.fromarray(canvas)
 
 
 def resize_image_limit(img, max_w=1080, max_h=1920):

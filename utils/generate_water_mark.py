@@ -15,6 +15,23 @@ except Exception:
     _JPEG = None
 
 
+def process_image_task(args):
+    """
+    并行任务：处理单张图片并写出到目标路径
+    """
+    (ori_path, name, user_number, base_date_str, time_str, out_file) = args
+
+    add_watermark_to_image(
+        original_image_path=ori_path,
+        name=name,
+        user_number=user_number,
+        base_date=base_date_str,
+        base_time=time_str,
+        output_path=out_file,
+    )
+    return out_file
+
+
 def _load_and_fit_image_fast(image_path, canvas_width=1080, canvas_height=1920):
     """
     高性能加载并适配图片到固定画布尺寸（cover 模式，铺满，无白边）
