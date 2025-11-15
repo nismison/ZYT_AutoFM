@@ -29,6 +29,7 @@ class IMMICHApi:
             data = resp.json()
             return int(data.get("total", 0))
         except Exception as e:
+            print(f"❌ 获取统计数据失败: {e}")
             return None
 
     def upload_to_immich_file(self, file_path: str):
