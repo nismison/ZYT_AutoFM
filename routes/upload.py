@@ -157,7 +157,7 @@ def upload_with_watermark():
             except Exception:
                 pass
 
-        log_line(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
+        log_line(f"[INFO] 生成水印图片 {len(oss_urls)} 张（merge={merge}）")
 
         return jsonify({
             "success": True,
@@ -443,7 +443,7 @@ def review_clear():
 
     except Exception as e:
         # 不抛错，只记录，仍返回成功
-        log_line(f"[review_clear] 删除失败: {target_dir} -> {e}")
+        log_line(f"[ERROR] 审核记录删除失败: {target_dir} -> {e}")
 
     return jsonify({"msg": "ok"})
 

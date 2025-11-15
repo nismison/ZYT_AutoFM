@@ -1,11 +1,11 @@
 import os
-import time
 import shutil
-import threading
+import time
 from datetime import datetime
+
+from apis.immich_api import IMMICHApi
 from db import UploadTask, UploadRecord
 from utils.logger import log_line
-from apis.immich_api import IMMICHApi
 
 MAX_RETRY = 3
 FAILED_DIR = "storage/failed_uploads"
@@ -18,7 +18,7 @@ def ensure_failed_dir():
 
 def task_worker():
     """后台异步上传 Immich（自动重试 + 写入 UploadRecord + 失败转存）"""
-    log_line(f"[Worker] 后台上传线程已启动 (PID={os.getpid()})")
+    log_line(f"[INFO] 后台上传线程已启动 (PID={os.getpid()})")
 
     ensure_failed_dir()
     immich_api = IMMICHApi()
@@ -63,7 +63,7 @@ def task_worker():
                         thumb=None,
                     )
                 except Exception as e:
-                    log_line(f"[Worker] 写 UploadRecord 失败: {e}")
+                    log_line(f"[INFO] 写 UploadRecord 失败: {e}")
 
                 # 更新任务状态
                 UploadTask.update(
@@ -77,7 +77,7 @@ def task_worker():
                 except FileNotFoundError:
                     pass
 
-                log_line(f"[Worker] 上传成功: {task.tmp_path}")
+                log_line(f"[INFO] 上传成功: {task.tmp_path}")
                 continue
 
             # ---- 上传失败：自动重试 ----
@@ -95,7 +95,7 @@ def task_worker():
                     updated_at=datetime.now()
                 ).where(UploadTask.id == task.id).execute()
 
-                log_line(f"[Worker] 多次失败，已转存至: {target}")
+                log_line(f"[ERROR] 多次失败，已转存至: {target}")
             else:
                 backoff = min(5 * new_retry, 20)
 
@@ -106,7 +106,7 @@ def task_worker():
                 ).where(UploadTask.id == task.id).execute()
 
                 log_line(
-                    f"[Worker] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: {task.tmp_path}"
+                    f"[ERROR] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: {task.tmp_path}"
                 )
 
                 time.sleep(backoff)
@@ -114,6 +114,6 @@ def task_worker():
         except Exception as e:
             import traceback
             traceback.print_exc()
-            log_line(f"[Worker] 异常: {e}")
+            log_line(f"[ERROR] 异常: {e}")
 
         time.sleep(0.1)

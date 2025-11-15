@@ -39,7 +39,6 @@ GALLERY_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery_
 WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'watermark')
 
 # ==================== 日志配置 ====================
-LOG_PATH = "./gunicorn_error.log" if IS_DEV else "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
 LOGGING_CONFIG = {
     'version': 1,
     'handlers': {

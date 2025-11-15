@@ -59,7 +59,7 @@ def serve_image(image_type, image_id):
         return _serve_file_with_cache(path)
 
     except Exception as e:
-        log_line(f"获取图片失败: {e}")
+        log_line(f"[ERROR] 获取图片失败: {e}")
         return jsonify({"error": str(e)}), 500
 
 

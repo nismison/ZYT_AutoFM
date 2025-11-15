@@ -1,6 +1,5 @@
 import threading
 
-from db import ensure_tables
 from utils.git_pull import git_pull
 
 # 项目目录

@@ -23,7 +23,7 @@ def git_pull():
         "git reset --hard origin/master"
     )
 
-    log_line("🚀 Gunicorn Master 启动：强制同步最新代码（丢弃本地修改）...")
+    log_line("[INFO] Gunicorn Master 启动：强制同步最新代码（丢弃本地修改）...")
 
     try:
         result = subprocess.run(
@@ -39,14 +39,14 @@ def git_pull():
         stderr = result.stderr.strip()
 
         if result.returncode != 0:
-            log_line(f"❌ Git 强制拉取失败：{stderr or stdout}")
+            log_line(f"[ERROR] Git 强制拉取失败：{stderr or stdout}")
         else:
-            log_line("✅ 代码已成功强制同步至最新版本")
+            log_line("[INFO] 代码已成功强制同步至最新版本")
             if stdout:
                 log_line(stdout)
 
     except subprocess.TimeoutExpired:
-        log_line("⚠️ Git 拉取超时，跳过更新")
+        log_line("[WARNING] Git 拉取超时，跳过更新")
 
     except Exception as e:
-        log_line(f"❌ 强制拉取更新出现异常：{e}")
+        log_line(f"[ERROR] 强制拉取更新出现异常：{e}")

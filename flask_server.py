@@ -22,8 +22,29 @@ def truncate(text, limit=500):
     return text[:limit] + ("...（已截断）" if len(text) > limit else "")
 
 
+def detect_file_type(filename: str) -> str:
+    """
+    根据文件名后缀判断文件类型（用于 multipart/form-data）
+    """
+    if not filename:
+        return "[文件]"
+
+    ext = filename.lower().rsplit(".", 1)[-1]
+
+    if ext in {"jpg", "jpeg", "png", "gif", "bmp", "webp"}:
+        return "[图片]"
+    if ext in {"mp4", "mov", "avi", "mkv", "wmv", "flv"}:
+        return "[视频]"
+    if ext in {"mp3", "wav", "aac", "flac", "m4a", "ogg"}:
+        return "[音频]"
+
+    return f"[文件:{ext}]"
+
+
 def summarize_by_type(content_type, data):
-    """根据类型生成内容概要"""
+    """
+    根据 Content-Type + 内容 生成概要
+    """
     text = data or ""
     if isinstance(text, bytes):
         text = text.decode("utf-8", errors="replace")
@@ -32,6 +53,7 @@ def summarize_by_type(content_type, data):
         return truncate(text)
 
     ct = content_type.lower()
+
     if "image" in ct:
         return "[图片]"
     if "video" in ct:
@@ -40,6 +62,7 @@ def summarize_by_type(content_type, data):
         return "[音频]"
     if "multipart/form-data" in ct or "octet-stream" in ct:
         return "[文件]"
+
     return truncate(text)
 
 
@@ -78,21 +101,34 @@ def create_app() -> Flask:
     @app.before_request
     def log_request():
         """请求前日志记录"""
+
         if should_skip_logging(request.path):
             return
 
         content_type = request.content_type or ""
+        body = None
+
         if "multipart/form-data" in content_type:
+            # 表单字段
             form_fields = {k: v for k, v in request.form.items()}
-            file_fields = {k: "[文件]" for k in request.files}
+
+            # 文件字段: 根据文件名判断真实类型
+            file_fields = {}
+            for key, file in request.files.items():
+                file_fields[key] = detect_file_type(file.filename)
+
             body = {"form": form_fields, "files": file_fields}
+
         else:
-            data = None
+            # 非文件请求
             if is_textual_content(content_type):
                 try:
                     data = request.get_data(as_text=True)
                 except UnicodeDecodeError:
                     data = request.get_data()
+            else:
+                data = None
+
             body = summarize_by_type(content_type, data)
 
         log_line("=" * 60)
@@ -102,19 +138,37 @@ def create_app() -> Flask:
     @app.after_request
     def log_response(response):
         """响应后日志记录"""
+
         if should_skip_logging(request.path):
             return response
 
         content_type = response.content_type or ""
+
         if "text/event-stream" in content_type:
             body = "[SSE流]"
+
         elif getattr(response, "direct_passthrough", False):
             body = "[直接透传响应]"
+
         elif not is_textual_content(content_type):
-            body = summarize_by_type(content_type, None)
+            # 二进制响应（如文件下载）
+            # 这里从 response.headers 里面尝试找文件名
+            filename = (
+                response.headers.get("Content-Disposition", "")
+                    .replace("attachment;", "")
+                    .replace("filename=", "")
+                    .strip('" ')
+            )
+            if filename:
+                body = detect_file_type(filename)
+            else:
+                body = summarize_by_type(content_type, None)
+
         else:
+            # 可读取文本
             try:
-                body = summarize_by_type(content_type, response.get_data(as_text=True))
+                data = response.get_data(as_text=True)
+                body = summarize_by_type(content_type, data)
             except (RuntimeError, UnicodeDecodeError):
                 try:
                     body = summarize_by_type(content_type, response.get_data())
@@ -123,6 +177,7 @@ def create_app() -> Flask:
 
         log_line(f"响应状态: {response.status}")
         log_line(f"响应内容: {body}")
+
         return response
 
     # 注册蓝图
