@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 from flask import Blueprint, jsonify, send_from_directory
 
 bp = Blueprint("update", __name__)

@@ -1,9 +1,10 @@
 import base64
 import json
 import random
+from urllib.parse import unquote
+
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-from urllib.parse import unquote
 
 # 写死的密钥
 AES_KEY = "e373d090928170eb"

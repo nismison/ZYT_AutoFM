@@ -1,10 +1,12 @@
-import io
-import hashlib
 import datetime
+import hashlib
+import io
 import time
+
 import pytest
 import requests
 from PIL import Image, ImageDraw, ImageFont
+
 from apis.immich_api import IMMICHApi
 from config import BASE_URL
 

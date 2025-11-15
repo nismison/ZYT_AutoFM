@@ -1,5 +1,6 @@
-import psutil
 import ipaddress
+
+import psutil
 
 
 def get_real_lan_ip():

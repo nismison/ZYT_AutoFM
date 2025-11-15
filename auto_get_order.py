@@ -1,8 +1,8 @@
 import logging
 import traceback
 
-from utils.notification import Notify
 from apis.fm_api import FMApi
+from utils.notification import Notify
 
 notify = Notify()
 

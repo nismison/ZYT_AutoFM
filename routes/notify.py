@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+
 from utils.notification import Notify
 
 bp = Blueprint("notify", __name__)

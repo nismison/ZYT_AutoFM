@@ -9,13 +9,12 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request, render_template
 from werkzeug.utils import secure_filename
 
-from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord, UploadTask
+from tasks.watermark_task import watermark_runner
 from utils.logger import log_line
 from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, find_review_dir_by_filename
-from tasks.watermark_task import watermark_runner
 
 bp = Blueprint("upload", __name__)
 

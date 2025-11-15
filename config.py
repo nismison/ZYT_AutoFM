@@ -1,5 +1,6 @@
-import os
 import logging.config
+import os
+
 from dotenv import load_dotenv
 
 from utils.ip_address import get_real_lan_ip

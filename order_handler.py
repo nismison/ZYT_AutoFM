@@ -7,11 +7,11 @@ import re
 import tempfile
 import uuid
 
-from utils.notification import Notify
 from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_XFSS, order_template_DYL
-from utils.storage import get_random_template_file
 from tasks.watermark_task import add_watermark_to_image
+from utils.notification import Notify
+from utils.storage import get_random_template_file
 
 logger = logging.getLogger(__name__)
 

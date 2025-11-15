@@ -3,7 +3,6 @@ from datetime import datetime
 from apis.fm_api import FMApi
 from utils.notification import Notify
 
-
 today = datetime.today()
 now = today.time()
 month = str('{:0>2d}'.format(today.month))

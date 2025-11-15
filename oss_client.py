@@ -1,12 +1,11 @@
-import json
+import datetime
+import hashlib
+import hmac
+import logging
 import os
 import time
-import hmac
-import hashlib
 import uuid
-import datetime
-import logging
-from urllib.parse import quote
+
 from config import FM_BASE_URL, HEADERS_BASE
 
 logger = logging.getLogger(__name__)

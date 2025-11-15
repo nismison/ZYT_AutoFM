@@ -1,7 +1,8 @@
 import requests
-from flask import Blueprint, request, Response, jsonify
-from config import TARGET_BASE, BAICHUAN_PROXY_URL
+from flask import Blueprint, request, Response
+
 from apis.ql_api import QLApi
+from config import TARGET_BASE
 from utils.notification import Notify
 
 bp = Blueprint("proxy", __name__)

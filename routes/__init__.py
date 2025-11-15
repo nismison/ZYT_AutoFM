@@ -1,10 +1,11 @@
 from flask import Flask
-from .proxy import bp as proxy_bp
+
 from .image import bp as image_bp
-from .upload import bp as upload_bp
-from .notify import bp as notify_bp
-from .update import bp as update_bp
 from .log_viewer import bp as log_viewer_bp
+from .notify import bp as notify_bp
+from .proxy import bp as proxy_bp
+from .update import bp as update_bp
+from .upload import bp as upload_bp
 
 
 def register_blueprints(app: Flask):

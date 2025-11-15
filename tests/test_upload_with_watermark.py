@@ -1,6 +1,7 @@
+import datetime
 import io
 import json
-import datetime
+
 import pytest
 import requests
 from PIL import Image, ImageDraw, ImageFont
