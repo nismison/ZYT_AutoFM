@@ -24,7 +24,7 @@ class IMMICHApi:
         }
 
         try:
-            resp = requests.post(f"{IMMICH_URL}/search/statistics", json=payload, headers=self.headers, timeout=15)
+            resp = requests.post(f"http://immich_server:2283/api/search/statistics", json=payload, headers=self.headers, timeout=15)
             resp.raise_for_status()
             data = resp.json()
             return int(data.get("total", 0))
