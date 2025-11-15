@@ -1,8 +1,68 @@
 import json
 from datetime import datetime, timedelta
-from PIL import Image, ImageDraw, ImageFont
+
 import qrcode
+from PIL import Image, ImageDraw
+from PIL import ImageFont
+
 from utils.crypter import create_watermark_data, encrypt_watermark
+
+try:
+    from turbojpeg import TurboJPEG, TJPF_RGB
+
+    _JPEG = TurboJPEG()
+except Exception:
+    _JPEG = None
+
+
+def _load_and_fit_image_fast(image_path, canvas_width=1080, canvas_height=1920):
+    """
+    高性能加载并适配图片到固定画布尺寸（cover 模式，铺满，无白边）
+
+    :param image_path: 原图路径
+    :param canvas_width: 目标画布宽度（px）
+    :param canvas_height: 目标画布高度（px）
+    :returns: 已经旋转、缩放、裁剪好的 PIL.Image 对象（RGB）
+    :raises keyError: 文件无法读取或解码时可能抛出 OSError，由上层捕获
+    """
+    # 1. 尝试用 TurboJPEG 解码，失败则回退到 Pillow
+    if _JPEG is not None:
+        with open(image_path, "rb") as f:
+            buf = f.read()
+        np_img = _JPEG.decode(buf, pixel_format=TJPF_RGB)
+        img = Image.fromarray(np_img, mode="RGB")
+    else:
+        img = Image.open(image_path).convert("RGB")
+
+    # 2. 横图统一旋转为竖图，便于后续逻辑保持一致
+    if img.width > img.height:
+        img = img.rotate(-90, expand=True)
+
+    src_w, src_h = img.size
+    if src_w == 0 or src_h == 0:
+        # 直接抛错给上层处理
+        raise OSError("invalid image size")
+
+    # 3. cover 模式：按比例放大，保证至少一边贴满画布，然后居中裁剪
+    scale_w = canvas_width / src_w
+    scale_h = canvas_height / src_h
+    scale = max(scale_w, scale_h)
+
+    new_w = int(src_w * scale)
+    new_h = int(src_h * scale)
+    if new_w <= 0 or new_h <= 0:
+        raise OSError("invalid scaled size")
+
+    # BILINEAR 比 LANCZOS 快很多，视觉效果足够
+    img = img.resize((new_w, new_h), Image.BILINEAR)
+
+    left = (new_w - canvas_width) // 2
+    top = (new_h - canvas_height) // 2
+    right = left + canvas_width
+    bottom = top + canvas_height
+
+    img = img.crop((left, top, right, bottom))
+    return img
 
 
 def calculate_time(base_date, base_time, minute_offset=0):
@@ -62,119 +122,104 @@ def draw_rounded_rectangle(draw, x, y, width, height, radius, fill, alpha=128):
     main_image.paste(temp_image, (int(x), int(y)), temp_image)
 
 
-def add_watermark_to_image(original_image_path, name="梁振卓", user_number="2409840", base_date=None, base_time=None,
+def add_watermark_to_image(original_image_path,
+                           name="梁振卓",
+                           user_number="2409840",
+                           base_date=None,
+                           base_time=None,
                            output_path=None,
                            minute_offset=0):
     """
-    给单张图片添加水印
-    """
+    给单张图片添加水印（TurboJPEG 加速读图 + 高效缩放 + 固定画布）
 
+    :param original_image_path: 原始图片路径
+    :param name: 用户姓名，用于显示在水印上
+    :param user_number: 用户编号，用于水印加密信息
+    :param base_date: 基准日期字符串，格式 YYYY-MM-DD，None 时使用当天
+    :param base_time: 基准时间字符串，格式 HH:MM，None 时使用当前时间
+    :param output_path: 输出图片路径，None 时自动生成临时路径
+    :param minute_offset: 在基准时间上的分钟偏移，用于生成不同时间戳
+    :returns: 生成后的水印图片保存路径
+    :raises keyError: 当原图无法读取或内部依赖函数异常时抛出
+    """
     today = datetime.today()
-    now = today.time()
-    month = str('{:0>2d}'.format(today.month))
-    day = str('{:0>2d}'.format(today.day))
-    hour = str('{:0>2d}'.format(now.hour))
-    minute = str('{:0>2d}'.format(now.minute))
 
     if base_date is None:
-        base_date = f"2025-{month}-{day}"
-    if base_time is None:
-        base_time = f"{hour}:{minute}"
+        base_date = f"{today.year:04d}-{today.month:02d}-{today.day:02d}"
 
-    # 画布尺寸
+    if base_time is None:
+        now = today.time()
+        base_time = f"{now.hour:02d}:{now.minute:02d}"
+
+    # 固定竖版画布
     canvas_width = 1080
     canvas_height = 1920
-    scale = canvas_width / 750
+    scale = canvas_width / 750.0
 
-    # 创建白色背景
-    result_image = Image.new('RGB', (canvas_width, canvas_height), 'white')
-    draw = ImageDraw.Draw(result_image)
+    # 1. 高性能加载 + 适配到 1080x1920 画布（内部已做旋转 + cover）
+    base_image = _load_and_fit_image_fast(
+        original_image_path,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height
+    )
 
-    # 加载原图
-    original_image = Image.open(original_image_path)
+    # 2. 在已经铺满画布的图上做绘制
+    draw = ImageDraw.Draw(base_image)
 
-    # 判断图片方向并旋转
-    if original_image.width > original_image.height:
-        # 横向图片，顺时针旋转90度
-        original_image = original_image.rotate(-90, expand=True)
-
-    # 检查是否需要裁剪
-    need_crop = check_need_crop(original_image.width, original_image.height)
-
-    if need_crop:
-        # 裁剪图片
-        crop_info = calculate_crop_area(original_image.width, original_image.height)
-        cropped_image = original_image.crop((
-            crop_info['sx'], crop_info['sy'],
-            crop_info['sx'] + crop_info['sWidth'],
-            crop_info['sy'] + crop_info['sHeight']
-        ))
-        resized_image = cropped_image.resize((canvas_width, canvas_height), Image.LANCZOS)
-        result_image.paste(resized_image, (0, 0))
-    else:
-        # 直接缩放图片
-        img_ratio = original_image.width / original_image.height
-        canvas_ratio = canvas_width / canvas_height
-
-        if abs(img_ratio - canvas_ratio) < 0.01:
-            resized_image = original_image.resize((canvas_width, canvas_height), Image.LANCZOS)
-            result_image.paste(resized_image, (0, 0))
-        else:
-            if img_ratio > canvas_ratio:
-                draw_height = canvas_height
-                draw_width = int(canvas_height * img_ratio)
-                draw_x = (canvas_width - draw_width) // 2
-                draw_y = 0
-            else:
-                draw_width = canvas_width
-                draw_height = int(canvas_width / img_ratio)
-                draw_x = 0
-                draw_y = (canvas_height - draw_height) // 2
-
-            resized_image = original_image.resize((draw_width, draw_height), Image.LANCZOS)
-            result_image.paste(resized_image, (draw_x, draw_y))
-
-    # 计算时间信息
+    # 3. 计算时间信息
     time_info = calculate_time(base_date, base_time, minute_offset)
 
-    # 生成水印数据并加密
+    # 4. 生成水印数据并加密
     watermark_data = create_watermark_data(
-        time_info['timestamp'],
+        time_info["timestamp"],
         int(user_number),
         name
     )
     encrypted_data = encrypt_watermark(watermark_data)
 
-    # 生成二维码内容
+    # 5. 生成二维码内容（JSON）
     qr_data = json.dumps({
         "text": encrypted_data,
         "version": "v1.0"
     })
 
-    # 生成二维码
+    # 6. 生成二维码并绘制到底部右下角（带背景色块）
     qr_size = 260
     qr_x = canvas_width - qr_size
     qr_y = canvas_height - qr_size
 
-    # 绘制二维码背景（白色不透明）
-    draw_rounded_rectangle(draw, qr_x, qr_y, qr_size, qr_size, 0, (255, 255, 0), alpha=255)
+    # 纯色底块：不透明黄底，方便扫码
+    draw_rounded_rectangle(
+        draw,
+        qr_x,
+        qr_y,
+        qr_size,
+        qr_size,
+        0,
+        (255, 255, 0),
+        alpha=255
+    )
 
-    # 生成并粘贴二维码
     qr_image = generate_qrcode(qr_data, qr_size)
-    result_image.paste(qr_image, (qr_x, qr_y))
+    base_image.paste(qr_image, (qr_x, qr_y))
 
-    # 绘制文字水印
-    draw_text_watermark(draw, result_image, time_info, name, scale)
+    # 7. 绘制文字水印（日期、时间、姓名等）
+    draw_text_watermark(
+        draw,
+        base_image,
+        time_info,
+        name,
+        scale
+    )
 
-    # 保存结果
+    # 8. 保存结果（quality=85，足够清晰但比 95 快很多）
     if output_path:
-        result_image.save(output_path, 'JPEG', quality=95)
+        base_image.save(output_path, "JPEG", quality=85, optimize=False)
         return output_path
-    else:
-        # 返回临时文件路径
-        temp_path = f"watermarked_{int(datetime.now().timestamp())}.jpg"
-        result_image.save(temp_path, 'JPEG', quality=95)
-        return temp_path
+
+    temp_path = f"watermarked_{int(datetime.now().timestamp())}.jpg"
+    base_image.save(temp_path, "JPEG", quality=85, optimize=False)
+    return temp_path
 
 
 def draw_text_watermark(draw, image, time_info, name, scale):

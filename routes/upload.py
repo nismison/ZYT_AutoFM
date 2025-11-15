@@ -44,88 +44,123 @@ def check_uploaded():
 
 @bp.route("/upload_with_watermark", methods=["POST"])
 def upload_with_watermark():
-    """上传并添加水印（支持多文件，可选合并）"""
-    try:
-        name = request.form.get('name')
-        user_number = request.form.get('user_number')
-        base_date = request.form.get('base_date')
-        base_time = request.form.get('base_time')
-        merge = request.form.get('merge') == "true"
+    """
+    上传并添加水印（支持多文件，可选合并），使用高性能水印流水线
 
+    :param None: 从 Flask 的 request 中读取表单字段和文件
+    :returns: JSON 响应，包含 oss_urls 和生成数量
+    :raises keyError: 参数缺失或内部处理异常时返回 4xx/5xx
+    """
+    try:
+        name = request.form.get("name")
+        user_number = request.form.get("user_number")
+        base_date = request.form.get("base_date")
+        base_time = request.form.get("base_time")
+        merge = request.form.get("merge") == "true"
+
+        # 收集所有文件（兼容 file / files[] 等写法）
         files = []
-        for k in request.files.keys():
-            files.extend(request.files.getlist(k))
-        if not files and 'file' in request.files:
-            files = [request.files['file']]
+        for key in request.files.keys():
+            files.extend(request.files.getlist(key))
+        if not files and "file" in request.files:
+            files = [request.files["file"]]
 
         if not all([name, user_number]) or not files:
             return jsonify({"error": "缺少必要参数(name, user_number, file)"}), 400
 
-        # 时间基线
+        # 时间基线：用于给多张图片生成递增时间
         if base_date and base_time:
-            curr = datetime.strptime(f"{base_date} {base_time}", "%Y-%m-%d %H:%M")
+            curr = datetime.strptime(
+                f"{base_date} {base_time}",
+                "%Y-%m-%d %H:%M"
+            )
         else:
             curr = datetime.now()
 
-        result_paths = []
-        temps = []
-        for f in files:
-            fd, ori = tempfile.mkstemp(suffix=".jpg")
-            os.close(fd)
-            f.save(ori)
-            temps.append(ori)
+        # 预先计算日期字符串，防止循环中反复 now()
+        base_date_str = base_date or datetime.now().strftime("%Y-%m-%d")
 
-            pc = PIL.Image.open(ori)
-            pc.save(ori, quality=70, optimize=True)
-            pc.close()
+        result_paths = []
+        temp_paths = []
+
+        for idx, f in enumerate(files):
+            # 保留原始扩展名，默认回退为 .jpg
+            suffix = os.path.splitext(f.filename or "")[1].lower()
+            if not suffix:
+                suffix = ".jpg"
+
+            fd, ori_path = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            f.save(ori_path)
+            temp_paths.append(ori_path)
 
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            suffix = generate_random_suffix()
-            image_id = f"{user_number}_{ts}_{suffix}"
-            out_file = os.path.join(WATERMARK_STORAGE_DIR, f"{image_id}.jpg")
+            suffix_code = generate_random_suffix()
+            image_id = f"{user_number}_{ts}_{suffix_code}"
+            out_file = os.path.join(
+                WATERMARK_STORAGE_DIR,
+                f"{image_id}.jpg"
+            )
 
-            # 每张 +1~2 分钟
-            if len(result_paths):
+            # 多张图：每张增加 1~2 分钟，模拟拍摄时间递增
+            if idx > 0:
                 curr += timedelta(minutes=random.randint(1, 2))
-            tstr = curr.strftime("%H:%M")
+            time_str = curr.strftime("%H:%M")
 
+            # 调用高性能水印生成函数
             add_watermark_to_image(
-                original_image_path=ori,
+                original_image_path=ori_path,
                 name=name,
                 user_number=user_number,
-                base_date=base_date or datetime.now().strftime("%Y-%m-%d"),
-                base_time=tstr,
+                base_date=base_date_str,
+                base_time=time_str,
                 output_path=out_file,
             )
             result_paths.append((image_id, out_file))
 
-        # 合并
+        # 是否合并为拼图
         if merge and len(result_paths) > 1:
             merged = merge_images_grid([p for _, p in result_paths])
+            # 这里假设你已有 resize_image_limit，保持不变，只调质量
             merged = resize_image_limit(merged, max_w=1080, max_h=1920)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            suffix = generate_random_suffix()
-            merged_id = f"{user_number}_{ts}_{suffix}_merged"
-            merged_file = os.path.join(WATERMARK_STORAGE_DIR, f"{merged_id}.jpg")
-            merged.save(merged_file, quality=90, optimize=True)
+            suffix_code = generate_random_suffix()
+            merged_id = f"{user_number}_{ts}_{suffix_code}_merged"
+            merged_file = os.path.join(
+                WATERMARK_STORAGE_DIR,
+                f"{merged_id}.jpg"
+            )
+            merged.save(merged_file, quality=85, optimize=False)
             merged.close()
-            oss_urls = [get_image_url(merged_id, 'watermark')]
+            oss_urls = [get_image_url(merged_id, "watermark")]
         else:
-            oss_urls = [get_image_url(i, 'watermark') for i, _ in result_paths]
+            oss_urls = [
+                get_image_url(img_id, "watermark")
+                for img_id, _ in result_paths
+            ]
 
-        for p in temps:
+        # 清理临时文件
+        for p in temp_paths:
             try:
                 os.remove(p)
             except Exception:
+                # 忽略清理失败，避免影响主流程
                 pass
 
         log_line(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
-        return jsonify({"success": True, "oss_urls": oss_urls, "count": len(oss_urls)})
+        return jsonify({
+            "success": True,
+            "oss_urls": oss_urls,
+            "count": len(oss_urls)
+        })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 @bp.route("/upload_to_gallery", methods=["POST"])
