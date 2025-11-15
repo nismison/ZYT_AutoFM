@@ -7,6 +7,8 @@ from utils.ip_address import get_real_lan_ip
 load_dotenv()
 IS_DEV = os.getenv("ENV") == "dev"
 
+LOG_PATH = "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
+
 # ==================== 自动工单配置 ====================
 BASE_URL = f"http://{get_real_lan_ip()}:5001" if IS_DEV else "https://api.zytsy.icu"
 BAICHUAN_PROXY_URL = f"http://{get_real_lan_ip()}:8000" if IS_DEV else "https://baichuan.zytsy.icu"

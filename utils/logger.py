@@ -1,13 +1,13 @@
 import os
 import threading
 from datetime import datetime
-from gunicorn_conf import errorlog
+
+from config import LOG_PATH
 
 # 检测平台
 IS_WINDOWS = os.name == "nt"
 
 _lock = threading.Lock()
-LOG_PATH = errorlog
 
 
 def log_line(*args):
