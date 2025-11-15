@@ -24,14 +24,14 @@ def get_upload_count_by_minutes(minutes):
     start_str = start_time.strftime("%Y-%m-%dT%H:%M:%S+08:00")
     end_str = now.strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
-    return immich_api.get_statistics(start_str, end_str)
+    return start_str, end_str, immich_api.get_statistics(start_str, end_str)
 
 
 def main():
-    count = get_upload_count_by_minutes(10)
+    start_str, end_str, count = get_upload_count_by_minutes(10)
     print(f"新增资源数: {count}")
     if count is not None and count != 0:
-        msg = f"新增资源数 {count}"
+        msg = f"[{start_str} ~ {end_str}]新增资源数 {count}"
         Notify().send(msg)
         print("已推送通知")
 
