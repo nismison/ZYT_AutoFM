@@ -3,14 +3,23 @@ import numpy as np
 from PIL import Image
 
 
-def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 255, 255)):
+def merge_images_grid(image_paths,
+                            target_width: int = 1500,
+                            padding: int = 4,
+                            bg_color=(255, 255, 255)) -> Image.Image:
     """
-    numpy 加速版多图拼接（自适应网格）
+    使用 numpy + OpenCV 进行高性能多图拼接，生成自适应网格布局
+
+    :param image_paths: 图片路径列表
+    :param target_width: 最终合成图片宽度
+    :param padding: 图片间距像素
+    :param bg_color: 背景颜色 (R, G, B)
+    :returns: 已合成的 PIL.Image 对象
+    :raises keyError: 不涉及字典访问，不会抛出 keyError
     """
     pil_images = [Image.open(p).convert("RGB") for p in image_paths]
     imgs = [np.array(img) for img in pil_images]
     n = len(imgs)
-
     if n == 0:
         raise ValueError("No images provided")
 
@@ -29,7 +38,7 @@ def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 
     total_h = 0
 
     for row_imgs in groups:
-        ratios = [img.shape[1] / img.shape[0] for img in row_imgs]  # w/h
+        ratios = [img.shape[1] / img.shape[0] for img in row_imgs]
         total_ratio = sum(ratios)
         row_h = int(target_width / total_ratio)
 
@@ -59,7 +68,6 @@ def merge_images_grid(image_paths, target_width=1500, padding=4, bg_color=(255, 
         h, w = row.shape[0], row.shape[1]
         if w > target_width:
             row = cv2.resize(row, (target_width, h))
-
         cw = row.shape[1]
         offset = (target_width - cw) // 2
         canvas[y:y + h, offset:offset + cw] = row

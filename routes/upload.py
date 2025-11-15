@@ -1,8 +1,8 @@
-import concurrent.futures
 import os
 import random
 import shutil
 import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -12,12 +12,29 @@ from werkzeug.utils import secure_filename
 from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord
-from utils.generate_water_mark import process_image_task
 from utils.logger import log_line
 from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, find_review_dir_by_filename
+from watermark_task import watermark_runner
 
 bp = Blueprint("upload", __name__)
+
+WATERMARK_POOL = None
+
+
+def get_watermark_pool() -> ProcessPoolExecutor:
+    """
+    懒加载获取全局多进程池，避免 gunicorn preload 导致的共享问题
+
+    :param None: 无参数
+    :returns: ProcessPoolExecutor 实例，每个 worker 进程内一份
+    :raises keyError: 不涉及字典访问，不会抛出 keyError
+    """
+    global WATERMARK_POOL
+    if WATERMARK_POOL is None:
+        # 4C8G 基本可以跑满 4 进程图像任务；你也可以改为 3 试效果
+        WATERMARK_POOL = ProcessPoolExecutor(max_workers=4)
+    return WATERMARK_POOL
 
 
 @bp.route("/api/check_uploaded", methods=["GET"])
@@ -44,7 +61,11 @@ def check_uploaded():
 @bp.route("/upload_with_watermark", methods=["POST"])
 def upload_with_watermark():
     """
-    并行加水印 + numpy 高速 merge
+    多进程极速版：上传并为多张图片添加水印，可选合并拼图
+
+    :param None: 从 Flask request 中读取表单和文件
+    :returns: JSON 响应，包含 oss_urls 列表和生成数量
+    :raises keyError: 内部业务依赖访问配置字典时可能抛出 keyError
     """
     try:
         name = request.form.get("name")
@@ -62,20 +83,20 @@ def upload_with_watermark():
         if not all([name, user_number]) or not files:
             return jsonify({"error": "缺少必要参数(name, user_number, file)"}), 400
 
-        # 时间基线
         if base_date and base_time:
-            curr = datetime.strptime(f"{base_date} {base_time}", "%Y-%m-%d %H:%M")
+            curr = datetime.strptime(
+                f"{base_date} {base_time}",
+                "%Y-%m-%d %H:%M"
+            )
         else:
             curr = datetime.now()
 
         base_date_str = base_date or datetime.now().strftime("%Y-%m-%d")
 
-        # 临时文件列表
         temp_paths = []
-        task_args = []
-        result_paths = []
+        task_args_list = []
+        result_meta = []
 
-        # 创建临时文件 & 生成任务参数
         for idx, f in enumerate(files):
             suffix = os.path.splitext(f.filename or "")[1].lower()
             if not suffix:
@@ -86,58 +107,71 @@ def upload_with_watermark():
             f.save(ori_path)
             temp_paths.append(ori_path)
 
-            # ID 编码
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix_code = generate_random_suffix()
             image_id = f"{user_number}_{ts}_{suffix_code}"
-            out_file = os.path.join(WATERMARK_STORAGE_DIR, f"{image_id}.jpg")
+            out_file = os.path.join(
+                WATERMARK_STORAGE_DIR,
+                f"{image_id}.jpg"
+            )
 
-            # 时间递增
             if idx > 0:
                 curr += timedelta(minutes=random.randint(1, 2))
             time_str = curr.strftime("%H:%M")
 
-            task_args.append(
+            task_args_list.append(
                 (ori_path, name, user_number, base_date_str, time_str, out_file)
             )
-            result_paths.append((image_id, out_file))
+            result_meta.append((image_id, out_file))
 
-        # ============================
-        # 并行处理（核心加速点）
-        # ============================
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [executor.submit(process_image_task, args) for args in task_args]
-            concurrent.futures.wait(futures)
+        pool = get_watermark_pool()
+        futures = []
+        for args in task_args_list:
+            fut = pool.submit(watermark_runner, args)
+            futures.append(fut)
 
-        # ============================
-        # merge 阶段（用 numpy 加速）
-        # ============================
-        if merge and len(result_paths) > 1:
-            merged = merge_images_grid([p for _, p in result_paths])
+        for fut in as_completed(futures):
+            fut.result()  # 如果有异常，这里会抛出，交给外层 except
+
+        if merge and len(result_meta) > 1:
+            merged = merge_images_grid([p for _, p in result_meta])
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix_code = generate_random_suffix()
             merged_id = f"{user_number}_{ts}_{suffix_code}_merged"
-            merged_file = os.path.join(WATERMARK_STORAGE_DIR, f"{merged_id}.jpg")
+            merged_file = os.path.join(
+                WATERMARK_STORAGE_DIR,
+                f"{merged_id}.jpg"
+            )
             merged.save(merged_file, quality=85, optimize=False)
-            oss_urls = [get_image_url(merged_id, 'watermark')]
+            merged.close()
+            oss_urls = [get_image_url(merged_id, "watermark")]
         else:
-            oss_urls = [get_image_url(i, 'watermark') for i, _ in result_paths]
+            oss_urls = [
+                get_image_url(image_id, "watermark")
+                for image_id, _ in result_meta
+            ]
 
-        # 清理临时文件
         for p in temp_paths:
             try:
                 os.remove(p)
-            except:
+            except Exception:
                 pass
 
         log_line(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
 
-        return jsonify({"success": True, "oss_urls": oss_urls, "count": len(oss_urls)})
+        return jsonify({
+            "success": True,
+            "oss_urls": oss_urls,
+            "count": len(oss_urls)
+        })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 @bp.route("/upload_to_gallery", methods=["POST"])
