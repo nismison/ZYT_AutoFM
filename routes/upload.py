@@ -2,6 +2,7 @@ import os
 import random
 import shutil
 import tempfile
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -157,6 +158,8 @@ def upload_with_watermark():
                 pass
 
         log_line(f"[INFO] 生成水印图片 {len(oss_urls)} 张（merge={merge}）")
+
+        time.sleep(5)
 
         return jsonify({
             "success": True,
