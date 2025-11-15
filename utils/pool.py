@@ -1,7 +1,7 @@
-# utils/pool.py
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 
-# 根据 CPU 核数建议设置 max_workers
+multiprocessing.set_start_method("forkserver", force=True)
 WATERMARK_POOL = ProcessPoolExecutor(max_workers=3)
 
 
@@ -16,7 +16,7 @@ def watermark_task(args):
      base_time,
      output_path,
      minute_offset,
-    ) = args
+     ) = args
 
     from utils.generate_water_mark import add_watermark_to_image
 
