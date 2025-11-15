@@ -8,10 +8,10 @@ from utils.logger import log_line
 chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
 # 指定进程数
-workers = 4
+workers = 1
 
 # 指定每个进程开启的线程数
-threads = 4
+threads = 1
 
 # 启动用户
 user = 'www'
