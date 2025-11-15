@@ -48,11 +48,19 @@ loglevel = 'info'
 
 
 def on_starting(server):
-    ensure_tables()
     git_pull()
+
+    """主进程：建表 + 设置 WAL"""
+    from db import create_tables_once
+    create_tables_once()
 
 
 def post_fork(server, worker):
+    """启动后台上传进程"""
     from tasks.upload_worker import task_worker
     t = threading.Thread(target=task_worker, daemon=True)
     t.start()
+
+    """每个 worker：建立自己的数据库连接"""
+    from db import init_database_connection
+    init_database_connection()
