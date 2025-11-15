@@ -23,9 +23,11 @@ def get_upload_count_by_minutes(minutes):
 
 def main():
     count = get_upload_count_by_minutes(10)
+    print(f"新增资源数: {count}")
     if count is not None and count != 0:
         msg = f"新增资源数 {count}"
         Notify().send(msg)
+        print("已推送通知")
 
 
 if __name__ == "__main__":
