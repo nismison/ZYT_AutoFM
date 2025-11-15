@@ -1,6 +1,12 @@
+import os
+import sys
 from datetime import datetime, timedelta
+
 from apis.immich_api import IMMICHApi
 from utils.notification import Notify
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
 
 immich_api = IMMICHApi()
 
