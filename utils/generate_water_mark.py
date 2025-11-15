@@ -99,19 +99,31 @@ def add_watermark_to_image(
     if original.width > original.height:
         original = original.rotate(-90, expand=True)
 
-    # 用 thumbnail 直接把原图限制到最大尺寸
-    # thumbnail 自带等比例缩放，比 resize 快很多
-    original.thumbnail((canvas_width, canvas_height), Image.BILINEAR)
+    # ========== 修复：让原图铺满整个画布（cover 模式，无白边） ==========
 
-    # 创建白底画布
-    result = Image.new("RGB", (canvas_width, canvas_height), "white")
+    orig_w, orig_h = original.size
+    target_w, target_h = canvas_width, canvas_height
+
+    # 计算缩放比例：哪个方向需要放得更大，就用哪个比例
+    scale = max(target_w / orig_w, target_h / orig_h)
+
+    new_w = int(orig_w * scale)
+    new_h = int(orig_h * scale)
+
+    # resize（高性能）
+    resized = original.resize((new_w, new_h), Image.BILINEAR)
+
+    # 裁剪中央区域，使其刚好等于 1080×1920
+    left = (new_w - target_w) // 2
+    top = (new_h - target_h) // 2
+    right = left + target_w
+    bottom = top + target_h
+
+    final_bg = resized.crop((left, top, right, bottom))
+
+    # result_image = 完整背景
+    result = final_bg
     draw = ImageDraw.Draw(result)
-
-    # 计算居中位置
-    ow, oh = original.size
-    dx = (canvas_width - ow) // 2
-    dy = (canvas_height - oh) // 2
-    result.paste(original, (dx, dy))
 
     # 时间计算
     time_info = calculate_time(base_date, base_time, minute_offset)

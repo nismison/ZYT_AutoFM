@@ -4,7 +4,6 @@ from typing import Optional
 from flask import Flask, request
 from flask_cors import CORS
 
-from config import IS_DEV
 from db import init_database_connection
 from routes import register_blueprints
 from utils.logger import log_line
