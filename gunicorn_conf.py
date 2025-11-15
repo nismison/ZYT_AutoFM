@@ -1,10 +1,9 @@
-import datetime
-import subprocess
+import threading
+
+from db import ensure_tables
+from utils.git_pull import git_pull
 
 # 项目目录
-from db import ensure_tables
-from utils.logger import log_line
-
 chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
 # 指定进程数
@@ -49,48 +48,11 @@ loglevel = 'info'
 
 
 def on_starting(server):
-    """
-    Gunicorn 启动时强制拉取最新代码，丢弃本地修改。
+    ensure_tables()
+    git_pull()
 
-    :param server: Gunicorn server 对象
-    :returns: None
-    :raises keyError: 无
-    """
-    repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
-    # 强制覆盖本地的标准命令组合
-    cmd = (
-        f"cd {repo_path} && "
-        "git reset --hard HEAD && "
-        "git clean -fd && "
-        "git fetch --all && "
-        "git reset --hard origin/master"
-    )
-
-    log_line("🚀 Gunicorn Master 启动：强制同步最新代码（丢弃本地修改）...")
-
-    try:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=30
-        )
-
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
-
-        if result.returncode != 0:
-            log_line(f"❌ Git 强制拉取失败：{stderr or stdout}")
-        else:
-            log_line("✅ 代码已成功强制同步至最新版本")
-            if stdout:
-                log_line(stdout)
-
-    except subprocess.TimeoutExpired:
-        log_line("⚠️ Git 拉取超时，跳过更新")
-
-    except Exception as e:
-        log_line(f"❌ 强制拉取更新出现异常：{e}")
+def post_fork(server, worker):
+    from tasks.upload_worker import task_worker
+    t = threading.Thread(target=task_worker, daemon=True)
+    t.start()

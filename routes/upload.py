@@ -11,11 +11,11 @@ from werkzeug.utils import secure_filename
 
 from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
-from db import UploadRecord
+from db import UploadRecord, UploadTask
 from utils.logger import log_line
 from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, find_review_dir_by_filename
-from watermark_task import watermark_runner
+from tasks.watermark_task import watermark_runner
 
 bp = Blueprint("upload", __name__)
 
@@ -176,63 +176,41 @@ def upload_with_watermark():
 
 @bp.route("/upload_to_gallery", methods=["POST"])
 def upload_to_gallery():
-    """上传到相册目录，并上报 Immich"""
+    """上传到相册目录，加入后台队列异步上传 Immich"""
     try:
         file = request.files.get('file')
         etag = request.form.get('etag', '')
         if not all([file, etag]):
             return jsonify({"error": "缺少必要参数(file, etag)"}), 400
 
-        # 原文件名
         original_filename = secure_filename(file.filename)
         suffix = os.path.splitext(original_filename)[1].lower()
 
-        # 缓存目录
         cache_dir = "/tmp/upload_cache"
         os.makedirs(cache_dir, exist_ok=True)
 
-        # 生成唯一文件名
         unique_name = f"{uuid4().hex}_{original_filename}"
         tmp_path = os.path.join(cache_dir, unique_name)
-
-        # 保存文件
         file.save(tmp_path)
 
-        # 修改图片 EXIF
+        # 修改 EXIF 时间（仅 JPEG）
         if suffix in ['.jpg', '.jpeg']:
             update_exif_datetime(tmp_path)
 
-        # 修改视频 metadata（创建时间 + 修改时间）
-        # elif suffix in ['.mp4', '.mov', '.mkv', '.avi']:
-        #     fixed_path = tmp_path + "_fixed" + suffix
-        #     fix_video_metadata(tmp_path, fixed_path)
-        #
-        #     # 用修改后的覆盖
-        #     os.remove(tmp_path)
-        #     tmp_path = fixed_path
-
-        immich_api = IMMICHApi()
-        asset_id = immich_api.upload_to_immich_file(tmp_path)
-
-        # 清理缓存
-        try:
-            os.remove(tmp_path)
-        except FileNotFoundError:
-            pass
-
-        UploadRecord.create(
-            oss_url='oss_url',
-            file_size=100,
-            upload_time=datetime.now(),
+        # 写入任务队列
+        UploadTask.create(
+            tmp_path=tmp_path,
             etag=etag,
-            width=500,
-            height=500,
+            original_filename=original_filename,
+            suffix=suffix,
+            status="pending"
         )
 
-        if not asset_id:
-            return jsonify({"success": False, "error": "文件保存失败"}), 500
-
-        return jsonify({"success": True, "asset_id": asset_id, "message": "文件保存成功"})
+        # 前端不等待 Immich 上传
+        return jsonify({
+            "success": True,
+            "message": "文件已加入上传队列，后端稍后自动上传 Immich"
+        })
 
     except Exception as e:
         import traceback
