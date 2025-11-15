@@ -5,17 +5,18 @@ import tempfile
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from PIL import Image
+import PIL.Image
 from flask import Blueprint, jsonify, request, render_template
 from werkzeug.utils import secure_filename
 
 from apis.immich_api import IMMICHApi
 from config import WATERMARK_STORAGE_DIR
 from db import UploadRecord
+from utils.generate_water_mark import add_watermark_to_image
 from utils.logger import log_line
-from utils.merge import merge_images_grid
-from utils.pool import WATERMARK_POOL, watermark_task
-from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, find_review_dir_by_filename
+from utils.merge import merge_images_grid, resize_image_limit
+from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, fix_video_metadata, \
+    find_review_dir_by_filename
 
 bp = Blueprint("upload", __name__)
 
@@ -43,29 +44,14 @@ def check_uploaded():
 
 @bp.route("/upload_with_watermark", methods=["POST"])
 def upload_with_watermark():
-    """
-    上传并添加水印（支持多文件，可选合并）
-    - 主线程只做 IO
-    - 水印处理全部并行提交给进程池
-    - 加速 2~4 倍
-
-    :param form.name: 用户姓名
-    :param form.user_number: 用户编号
-    :param form.base_date: 基准日期
-    :param form.base_time: 基准时间
-    :param form.merge: 是否合并图片
-    :returns: oss_urls + 数量
-    :raises keyError: 缺少必要参数时报错
-    """
+    """上传并添加水印（支持多文件，可选合并）"""
     try:
-        # 基础参数
         name = request.form.get('name')
         user_number = request.form.get('user_number')
         base_date = request.form.get('base_date')
         base_time = request.form.get('base_time')
         merge = request.form.get('merge') == "true"
 
-        # 收集所有文件
         files = []
         for k in request.files.keys():
             files.extend(request.files.getlist(k))
@@ -75,86 +61,62 @@ def upload_with_watermark():
         if not all([name, user_number]) or not files:
             return jsonify({"error": "缺少必要参数(name, user_number, file)"}), 400
 
-        # 基准时间
+        # 时间基线
         if base_date and base_time:
             curr = datetime.strptime(f"{base_date} {base_time}", "%Y-%m-%d %H:%M")
         else:
             curr = datetime.now()
 
-        # 存放任务 future
-        futures = []
-        # 结果：[(image_id, out_file_path), ...]
-        result_items = []
-        # 临时文件
-        tmp_files = []
-
-        # 逐张图片：只处理 IO + 提交任务
+        result_paths = []
+        temps = []
         for f in files:
-            # 落地 temp
             fd, ori = tempfile.mkstemp(suffix=".jpg")
             os.close(fd)
             f.save(ori)
-            tmp_files.append(ori)
+            temps.append(ori)
 
-            # 提前做一次快速压缩优化（提高 Pillow 性能）
-            img = Image.open(ori)
-            img.save(ori, quality=70, optimize=False)
-            img.close()
+            pc = PIL.Image.open(ori)
+            pc.save(ori, quality=70, optimize=True)
+            pc.close()
 
-            # 生成输出文件名
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = generate_random_suffix()
             image_id = f"{user_number}_{ts}_{suffix}"
             out_file = os.path.join(WATERMARK_STORAGE_DIR, f"{image_id}.jpg")
 
-            # 更新时间（保持你原来的逻辑）
-            if len(result_items):
+            # 每张 +1~2 分钟
+            if len(result_paths):
                 curr += timedelta(minutes=random.randint(1, 2))
             tstr = curr.strftime("%H:%M")
 
-            # 提交多进程任务
-            args = (
-                ori,
-                name,
-                user_number,
-                base_date or datetime.now().strftime("%Y-%m-%d"),
-                tstr,
-                out_file,
-                0,
+            add_watermark_to_image(
+                original_image_path=ori,
+                name=name,
+                user_number=user_number,
+                base_date=base_date or datetime.now().strftime("%Y-%m-%d"),
+                base_time=tstr,
+                output_path=out_file,
             )
+            result_paths.append((image_id, out_file))
 
-            future = WATERMARK_POOL.submit(watermark_task, args)
-            futures.append(future)
-            result_items.append((image_id, out_file))
-
-        # 等全部水印任务完成（真正并行）
-        for f in futures:
-            f.result()
-
-        # 合并处理
-        if merge and len(result_items) > 1:
-            img_paths = [p for _, p in result_items]
-            merged = merge_images_grid(img_paths)
-
-            merged.thumbnail((1080, 1920), Image.BILINEAR)
-
+        # 合并
+        if merge and len(result_paths) > 1:
+            merged = merge_images_grid([p for _, p in result_paths])
+            merged = resize_image_limit(merged, max_w=1080, max_h=1920)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = generate_random_suffix()
             merged_id = f"{user_number}_{ts}_{suffix}_merged"
             merged_file = os.path.join(WATERMARK_STORAGE_DIR, f"{merged_id}.jpg")
-
-            merged.save(merged_file, quality=85, optimize=False)
+            merged.save(merged_file, quality=90, optimize=True)
             merged.close()
-
             oss_urls = [get_image_url(merged_id, 'watermark')]
         else:
-            oss_urls = [get_image_url(i, 'watermark') for i, _ in result_items]
+            oss_urls = [get_image_url(i, 'watermark') for i, _ in result_paths]
 
-        # 清理 temp 文件
-        for p in tmp_files:
+        for p in temps:
             try:
                 os.remove(p)
-            except:
+            except Exception:
                 pass
 
         log_line(f"生成水印图片 {len(oss_urls)} 张（merge={merge}）")
