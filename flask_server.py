@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from urllib.parse import parse_qs
 
 from flask import Flask, request
 from flask_cors import CORS
@@ -88,6 +89,26 @@ def should_skip_logging(path: str) -> bool:
     return any(path.startswith(p) for p in skip_prefixes)
 
 
+def safe_query_dict():
+    """安全解析 query，避免过长内容撑爆日志"""
+    raw = request.query_string.decode("utf-8", errors="replace")
+    if not raw:
+        return {}
+
+    # parse_qs 输出 list，转成更可读的结构
+    parsed = parse_qs(raw, keep_blank_values=True)
+
+    # 裁剪超长参数，避免打印 token / 大段内容
+    safe = {}
+    for k, v in parsed.items():
+        val = v[0] if v else ""
+        if len(val) > 200:
+            val = val[:200] + "...(省略)"
+        safe[k] = val
+
+    return safe
+
+
 # ==================================================
 # Flask 应用
 # ==================================================
@@ -105,14 +126,14 @@ def create_app() -> Flask:
         if should_skip_logging(request.path):
             return
 
+        # 解析 query 参数
+        query_dict = safe_query_dict()
+
         content_type = request.content_type or ""
-        body = None
 
         if "multipart/form-data" in content_type:
-            # 表单字段
             form_fields = {k: v for k, v in request.form.items()}
 
-            # 文件字段: 根据文件名判断真实类型
             file_fields = {}
             for key, file in request.files.items():
                 file_fields[key] = detect_file_type(file.filename)
@@ -120,7 +141,6 @@ def create_app() -> Flask:
             body = {"form": form_fields, "files": file_fields}
 
         else:
-            # 非文件请求
             if is_textual_content(content_type):
                 try:
                     data = request.get_data(as_text=True)
@@ -133,6 +153,7 @@ def create_app() -> Flask:
 
         log_line("=" * 60)
         log_line(f"请求路径: {request.path}")
+        log_line(f"查询参数: {query_dict}")
         log_line(f"请求数据: {body}")
 
     @app.after_request
