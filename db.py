@@ -65,6 +65,20 @@ class UploadTask(BaseModel):
         )
 
 
+class UploadChunkSession(BaseModel):
+    """
+    用于记录每个分片上传进度
+    """
+
+    upload_id = CharField(primary_key=True)
+    file_md5 = CharField()
+    filename = CharField()
+    total_parts = IntegerField()
+    uploaded_parts = TextField()  # [
+    created_at = DateTimeField(default=datetime.now)
+    status = CharField(default="uploading")  # uploading | merged | failed
+
+
 def init_database_connection():
     """
     初始化当前进程的数据库连接（worker 执行）。

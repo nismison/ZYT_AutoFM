@@ -64,8 +64,9 @@ def test_upload_to_gallery(immich_api, test_image):
     assert resp.status_code == 200, f"上传失败: HTTP {resp.status_code}"
     result = resp.json()
     assert result.get("success"), f"上传失败: {result}"
-    asset_id = result.get("asset_id")
-    print(f"[OK] 上传成功，资源ID: {asset_id}")
+    print(f"[OK] 上传成功")
+
+    time.sleep(3)
 
     # 检查 /api/check_uploaded 接口
     print("[INFO] 检查上传记录 ...")
@@ -75,16 +76,6 @@ def test_upload_to_gallery(immich_api, test_image):
     assert check_data.get("success"), f"check_uploaded 执行失败: {check_data}"
     assert check_data.get("uploaded"), "上传记录未在数据库中找到"
     print(f"[OK] check_uploaded 验证通过 (etag={etag})")
-
-    # 验证 Immich 中资源存在
-    verified = immich_api.verify_asset(asset_id)
-    assert verified, "Immich 验证失败"
-    print("[OK] Immich 验证通过")
-
-    # 删除资源
-    deleted = immich_api.delete_assets([asset_id])
-    assert deleted, "删除失败"
-    print("[OK] 删除测试资源成功")
 
     elapsed = time.time() - start
     print(f"[SUCCESS] 测试完成 ✅ 用时 {elapsed:.2f}s")

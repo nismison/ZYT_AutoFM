@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import shutil
@@ -11,8 +12,9 @@ from flask import Blueprint, jsonify, request, render_template
 from werkzeug.utils import secure_filename
 
 from config import WATERMARK_STORAGE_DIR
-from db import UploadRecord, UploadTask
+from db import UploadRecord, UploadTask, UploadChunkSession
 from tasks.watermark_task import watermark_runner
+from utils.chunk import merge_chunks, cleanup_chunks
 from utils.logger import log_line
 from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url, find_review_dir_by_filename
@@ -211,6 +213,94 @@ def upload_to_gallery():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/upload_to_gallery_chunked", methods=["POST"])
+def upload_to_gallery_chunked():
+    """分片断点续传版上传并自动生成 UploadTask 任务"""
+    upload_id = request.form.get("upload_id")
+    part_index = request.form.get("part_index", type=int)
+    total = request.form.get("total", type=int)
+    filename = request.form.get("filename")
+    file_md5 = request.form.get("file_md5")
+    chunk = request.files.get("file")
+
+    if not all([upload_id, part_index, total, filename, file_md5, chunk]):
+        return jsonify({"success": False, "error": "missing parameters"}), 400
+
+    # Step 1: 保存分片到缓存
+    tmp_dir = os.path.join("/tmp/uploads", upload_id)
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_path = os.path.join(tmp_dir, f"part_{part_index}")
+    chunk.save(tmp_path)
+    log_line(f"[INFO] 分片 {part_index}/{total} 已上传到缓存，上传会话ID： {upload_id}")
+
+    # Step 2: 写入/更新会话记录
+    session = UploadChunkSession.get_or_none(UploadChunkSession.upload_id == upload_id)
+    if not session:
+        session = UploadChunkSession.create(
+            upload_id=upload_id,
+            filename=filename,
+            file_md5=file_md5,
+            total_parts=total,
+            uploaded_parts=json.dumps([part_index]),
+        )
+    else:
+        parts = json.loads(session.uploaded_parts)
+        if part_index not in parts:
+            parts.append(part_index)
+            session.uploaded_parts = json.dumps(parts)
+            session.save()
+
+    uploaded_parts = json.loads(session.uploaded_parts)
+
+    # Step 3: 检查是否已上传完成
+    if len(uploaded_parts) == total:
+        log_line(f"[INFO] {upload_id}已全部上传完成，开始合并...")
+        final_path = os.path.join("/tmp/uploads", f"{upload_id}_{filename}")
+        merge_chunks(upload_id, final_path, total)
+
+        # Step 4: 写入 UploadTask任务
+        UploadTask.create(
+            file_path=final_path,
+            original_name=filename,
+            file_md5=file_md5,
+            file_size=os.path.getsize(final_path),
+            status="pending"
+        )
+        log_line(f"[INFO] 上传任务已创建 - {upload_id}: {final_path}")
+
+        session.status = "merged"
+        session.save()
+
+        # Step 5: 清理缓存
+        cleanup_chunks(upload_id)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "uploaded_parts": uploaded_parts,
+                "complete": True,
+            }
+        })
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "uploaded_parts": uploaded_parts,
+            "complete": False,
+        }
+    })
+
+
+@bp.route("/upload_to_gallery_chunked_status", methods=["GET"])
+def upload_to_gallery_chunked_status():
+    """获取分片上传进度"""
+    upload_id = request.args.get("upload_id")
+    session = UploadChunkSession.get_or_none(UploadChunkSession.upload_id == upload_id)
+    if not session:
+        return jsonify({"success": True, "data": {"uploaded_parts": []}})
+    return jsonify({"success": True, "data": {"uploaded_parts": json.loads(session.uploaded_parts)}})
 
 
 @bp.route("/api/add-review", methods=["POST"])
