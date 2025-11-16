@@ -24,7 +24,8 @@ def get_upload_count_by_minutes(minutes):
     start_str = start_time.strftime("%Y-%m-%dT%H:%M:%S+08:00")
     end_str = now.strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
-    return start_str, end_str, immich_api.get_statistics(start_str, end_str)
+    return start_time.strftime("%m-%d %H:%M"), now.strftime("%m-%d %H:%M"), immich_api.get_statistics(start_str,
+                                                                                                      end_str)
 
 
 def main():
