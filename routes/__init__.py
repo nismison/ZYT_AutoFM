@@ -6,6 +6,7 @@ from .notify import bp as notify_bp
 from .proxy import bp as proxy_bp
 from .update import bp as update_bp
 from .upload import bp as upload_bp
+from .app_config import bp as app_config
 
 
 def register_blueprints(app: Flask):
@@ -15,3 +16,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(notify_bp)
     app.register_blueprint(update_bp)
     app.register_blueprint(log_viewer_bp)
+    app.register_blueprint(app_config)
