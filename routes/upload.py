@@ -156,8 +156,6 @@ def upload_with_watermark():
 
         log_line(f"[INFO] 生成水印图片 {len(oss_urls)} 张（merge={merge}）")
 
-        time.sleep(5)
-
         return jsonify({
             "success": True,
             "oss_urls": oss_urls,
