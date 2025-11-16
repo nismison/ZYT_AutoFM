@@ -15,7 +15,7 @@ from db import UploadRecord, UploadTask
 from tasks.watermark_task import watermark_runner
 from utils.logger import log_line
 from utils.merge import merge_images_grid
-from utils.storage import generate_random_suffix, get_image_url, update_exif_datetime, find_review_dir_by_filename
+from utils.storage import generate_random_suffix, get_image_url, find_review_dir_by_filename
 
 bp = Blueprint("upload", __name__)
 
@@ -26,9 +26,7 @@ def get_watermark_pool() -> ProcessPoolExecutor:
     """
     懒加载获取全局多进程池，避免 gunicorn preload 导致的共享问题
 
-    :param None: 无参数
     :returns: ProcessPoolExecutor 实例，每个 worker 进程内一份
-    :raises keyError: 不涉及字典访问，不会抛出 keyError
     """
     global WATERMARK_POOL
     if WATERMARK_POOL is None:
@@ -63,7 +61,6 @@ def upload_with_watermark():
     """
     多进程极速版：上传并为多张图片添加水印，可选合并拼图
 
-    :param None: 从 Flask request 中读取表单和文件
     :returns: JSON 响应，包含 oss_urls 列表和生成数量
     :raises keyError: 内部业务依赖访问配置字典时可能抛出 keyError
     """
@@ -195,10 +192,6 @@ def upload_to_gallery():
         tmp_path = os.path.join(cache_dir, unique_name)
         file.save(tmp_path)
 
-        # 修改 EXIF 时间（仅 JPEG）
-        if suffix in ['.jpg', '.jpeg']:
-            update_exif_datetime(tmp_path)
-
         # 写入任务队列
         UploadTask.create(
             tmp_path=tmp_path,
@@ -233,13 +226,11 @@ def add_review():
     实际保存路径：
     storage/reviews/pending/aaa/bbb/ccc/this_is_a_video.mp4/123.jpg
 
-    :param file: 上传的文件对象
-    :param file_path: 原始业务文件路径，例如 /aaa/bbb/ccc/this_is_a_video.mp4
     :returns: JSON，包含保存路径、相对路径以及原始 file_path 信息
     :raises keyError: 当缺少 file 或 file_path 参数时抛出 KeyError
     """
-    file = request.files.get("file")
-    file_path = request.form.get("file_path")
+    file = request.files.get("file")  # 上传的文件对象
+    file_path = request.form.get("file_path")  # 原始业务文件路径，例如 /aaa/bbb/ccc/this_is_a_video.mp4
 
     if not file or not file_path:
         raise KeyError("file 和 file_path 为必填参数")
@@ -273,11 +264,8 @@ def add_review():
 def review_approve():
     """
     审核通过：根据文件名找到所在目录并整体移动到 approve 下
-
-    :param filename: 文件名（唯一 MD5 名）
-    :returns: JSON：移动结果
     """
-    filename = request.json.get("filename")
+    filename = request.json.get("filename")  # 文件名（唯一 MD5 名）
     if not filename:
         raise KeyError("filename 必填")
 
@@ -423,11 +411,8 @@ def review_clear():
         storage/reviews/approve/<file_path去掉前导/>/
 
     即使路径不存在也返回成功。
-
-    :param file_path: 原业务路径
-    :returns: {"msg": "ok"}
     """
-    file_path = request.json.get("file_path")
+    file_path = request.json.get("file_path")  # 原业务路径
 
     if not file_path:
         raise KeyError("file_path 必填，如 /storage/emulated/0/Movies/video.mp4")
