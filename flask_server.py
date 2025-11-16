@@ -122,24 +122,16 @@ def create_app() -> Flask:
     @app.before_request
     def log_request():
         """请求前日志记录"""
-
         if should_skip_logging(request.path):
             return
 
-        # 解析 query 参数
         query_dict = safe_query_dict()
-
         content_type = request.content_type or ""
 
         if "multipart/form-data" in content_type:
             form_fields = {k: v for k, v in request.form.items()}
-
-            file_fields = {}
-            for key, file in request.files.items():
-                file_fields[key] = detect_file_type(file.filename)
-
+            file_fields = {key: detect_file_type(file.filename) for key, file in request.files.items()}
             body = {"form": form_fields, "files": file_fields}
-
         else:
             if is_textual_content(content_type):
                 try:
@@ -148,18 +140,19 @@ def create_app() -> Flask:
                     data = request.get_data()
             else:
                 data = None
-
             body = summarize_by_type(content_type, data)
 
-        log_line("=" * 60)
-        log_line(f"请求路径: {request.path}")
-        log_line(f"查询参数: {query_dict}")
-        log_line(f"请求数据: {body}")
+        log_text = (
+            f"请求日志\n"
+            f"路径: {request.path}\n"
+            f"查询参数: {query_dict}\n"
+            f"请求体: {body}"
+        )
+        log_line(log_text)
 
     @app.after_request
     def log_response(response):
         """响应后日志记录"""
-
         if should_skip_logging(request.path):
             return response
 
@@ -167,13 +160,9 @@ def create_app() -> Flask:
 
         if "text/event-stream" in content_type:
             body = "[SSE流]"
-
         elif getattr(response, "direct_passthrough", False):
             body = "[直接透传响应]"
-
         elif not is_textual_content(content_type):
-            # 二进制响应（如文件下载）
-            # 这里从 response.headers 里面尝试找文件名
             filename = (
                 response.headers.get("Content-Disposition", "")
                     .replace("attachment;", "")
@@ -184,9 +173,7 @@ def create_app() -> Flask:
                 body = detect_file_type(filename)
             else:
                 body = summarize_by_type(content_type, None)
-
         else:
-            # 可读取文本
             try:
                 data = response.get_data(as_text=True)
                 body = summarize_by_type(content_type, data)
@@ -196,8 +183,13 @@ def create_app() -> Flask:
                 except RuntimeError:
                     body = "[响应内容不可读取]"
 
-        log_line(f"响应状态: {response.status}")
-        log_line(f"响应内容: {body}")
+        log_text = (
+            f"响应日志\n"
+            f"路径: {request.path}\n"
+            f"状态: {response.status}\n"
+            f"响应体: {body}"
+        )
+        log_line(log_text)
 
         return response
 
