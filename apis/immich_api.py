@@ -96,26 +96,27 @@ class IMMICHApi:
             print(f"❌ 获取原图失败: {e}")
             return False
 
-    def put_assets_to_album(self, asset_ids: List[str], album_ids: List[str]):
+    def put_assets_to_album(self, asset_id: str, album_id: str):
         """把资源添加到文件夹"""
         data = {
-            'albumIds': album_ids,
-            'assetIds': asset_ids
+            'ids': [asset_id]
         }
 
         try:
-            resp = requests.put(f"{IMMICH_URL}/assets", json=data, headers=self.headers)
+            resp = requests.put(f"{IMMICH_URL}/albums/{album_id}/assets", json=data, headers=self.headers)
 
+            print(resp.status_code)
             if resp.status_code == 200:
-                if resp.json().get("success", False):
+                print(resp.json())
+                if resp.json()[0].get("success", False):
                     print("✅ 添加成功")
                     return True
                 else:
-                    print("❌ 添加失败")
+                    print(f"❌ 添加失败: {resp.json()[0].get('error', '未知错误')}")
                     return False
             else:
-                print(f"❌ 添加失败: {resp.text}")
+                print(f"❌ 添加失败: Status Code -> {resp.status_code}")
                 return False
         except Exception as e:
-            print(f"❌ 添加失败: {e}")
+            print(f"❌ 添加失败: Exception -> {e}")
             return False

@@ -50,8 +50,7 @@ def task_worker():
             log_line(f"上传Immich -> asset_id: {asset_id}")
 
             # 添加到相册
-            put_album = immich_api.put_assets_to_album(asset_ids=[asset_id],
-                                                       album_ids=["fa588b80-6b40-4607-8d6c-cd90101db9e9"])
+            put_album = immich_api.put_assets_to_album(asset_id, "fa588b80-6b40-4607-8d6c-cd90101db9e9")
             log_line(f"添加到相册 -> {'成功' if put_album else '失败'}")
 
             if asset_id:
