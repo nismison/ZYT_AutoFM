@@ -47,16 +47,22 @@ def task_worker():
 
             # ---- 上传开始 ----
             asset_id = immich_api.upload_to_immich_file(task.tmp_path)
+            log_line(f"上传Immich -> asset_id: {asset_id}")
+
+            # 添加到相册
+            put_album = immich_api.put_assets_to_album(asset_ids=[asset_id],
+                                                       album_ids=["fa588b80-6b40-4607-8d6c-cd90101db9e9"])
+            log_line(f"添加到相册 -> {'成功' if put_album else '失败'}")
 
             if asset_id:
                 # ========== 上传成功：写入 UploadRecord ==========
                 try:
                     UploadRecord.create(
-                        oss_url="immich",                   # 你这里可以改为实际地址
+                        oss_url="immich",  # 你这里可以改为实际地址
                         file_size=os.path.getsize(task.tmp_path),
                         upload_time=datetime.now(),
                         original_filename=task.original_filename,
-                        width=0,                           # 如需真实宽高你可以提取
+                        width=0,  # 如需真实宽高你可以提取
                         height=0,
                         etag=task.etag,
                         device_model=None,

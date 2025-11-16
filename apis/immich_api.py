@@ -24,7 +24,8 @@ class IMMICHApi:
         }
 
         try:
-            resp = requests.post(f"http://immich_server:2283/api/search/statistics", json=payload, headers=self.headers, timeout=15)
+            resp = requests.post(f"http://immich_server:2283/api/search/statistics", json=payload, headers=self.headers,
+                                 timeout=15)
             resp.raise_for_status()
             data = resp.json()
             return int(data.get("total", 0))
@@ -93,4 +94,28 @@ class IMMICHApi:
                 return False
         except Exception as e:
             print(f"❌ 获取原图失败: {e}")
+            return False
+
+    def put_assets_to_album(self, asset_ids: List[str], album_ids: List[str]):
+        """把资源添加到文件夹"""
+        data = {
+            'albumIds': album_ids,
+            'assetIds': asset_ids
+        }
+
+        try:
+            resp = requests.put(f"{IMMICH_URL}/assets", json=data, headers=self.headers)
+
+            if resp.status_code == 200:
+                if resp.json().get("success", False):
+                    print("✅ 添加成功")
+                    return True
+                else:
+                    print("❌ 添加失败")
+                    return False
+            else:
+                print(f"❌ 添加失败: {resp.text}")
+                return False
+        except Exception as e:
+            print(f"❌ 添加失败: {e}")
             return False
