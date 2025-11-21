@@ -14,3 +14,13 @@ def send_notify():
         return jsonify({"error": "缺少content"}), 400
     notify.send(content)
     return jsonify({"success": True})
+
+
+@bp.route("/api/send_notify", methods=["POST"])
+def send_notify_api():
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    if not content:
+        return jsonify({"error": "缺少content"}), 400
+    notify.send(content)
+    return jsonify({"success": True})
