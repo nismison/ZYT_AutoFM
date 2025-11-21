@@ -14,192 +14,192 @@ from utils.logger import log_line
 # 工具函数
 # ==================================================
 def now() -> str:
-    return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+  return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
 
 
 def truncate(text, limit=500):
-    if not text:
-        return ""
-    return text[:limit] + ("...（已截断）" if len(text) > limit else "")
+  if not text:
+    return ""
+  return text[:limit] + ("...（已截断）" if len(text) > limit else "")
 
 
 def detect_file_type(filename: str) -> str:
-    """
-    根据文件名后缀判断文件类型（用于 multipart/form-data）
-    """
-    if not filename:
-        return "[文件]"
+  """
+  根据文件名后缀判断文件类型（用于 multipart/form-data）
+  """
+  if not filename:
+    return "[文件]"
 
-    ext = filename.lower().rsplit(".", 1)[-1]
+  ext = filename.lower().rsplit(".", 1)[-1]
 
-    if ext in {"jpg", "jpeg", "png", "gif", "bmp", "webp"}:
-        return "[图片]"
-    if ext in {"mp4", "mov", "avi", "mkv", "wmv", "flv"}:
-        return "[视频]"
-    if ext in {"mp3", "wav", "aac", "flac", "m4a", "ogg"}:
-        return "[音频]"
+  if ext in {"jpg", "jpeg", "png", "gif", "bmp", "webp"}:
+    return "[图片]"
+  if ext in {"mp4", "mov", "avi", "mkv", "wmv", "flv"}:
+    return "[视频]"
+  if ext in {"mp3", "wav", "aac", "flac", "m4a", "ogg"}:
+    return "[音频]"
 
-    return f"[文件:{ext}]"
+  return f"[文件:{ext}]"
 
 
 def summarize_by_type(content_type, data):
-    """
-    根据 Content-Type + 内容 生成概要
-    """
-    text = data or ""
-    if isinstance(text, bytes):
-        text = text.decode("utf-8", errors="replace")
+  """
+  根据 Content-Type + 内容 生成概要
+  """
+  text = data or ""
+  if isinstance(text, bytes):
+    text = text.decode("utf-8", errors="replace")
 
-    if not content_type:
-        return truncate(text)
-
-    ct = content_type.lower()
-
-    if "image" in ct:
-        return "[图片]"
-    if "video" in ct:
-        return "[视频]"
-    if "audio" in ct:
-        return "[音频]"
-    if "multipart/form-data" in ct or "octet-stream" in ct:
-        return "[文件]"
-
+  if not content_type:
     return truncate(text)
+
+  ct = content_type.lower()
+
+  if "image" in ct:
+    return "[图片]"
+  if "video" in ct:
+    return "[视频]"
+  if "audio" in ct:
+    return "[音频]"
+  if "multipart/form-data" in ct or "octet-stream" in ct:
+    return "[文件]"
+
+  return truncate(text)
 
 
 def is_textual_content(content_type: Optional[str]) -> bool:
-    if not content_type:
-        return True
-    ct = content_type.lower()
-    if ct.startswith("text/"):
-        return True
-    textual_prefixes = (
-        "application/json",
-        "application/javascript",
-        "application/xml",
-        "application/xhtml+xml",
-        "application/x-www-form-urlencoded",
-    )
-    return ct.startswith(textual_prefixes)
+  if not content_type:
+    return True
+  ct = content_type.lower()
+  if ct.startswith("text/"):
+    return True
+  textual_prefixes = (
+    "application/json",
+    "application/javascript",
+    "application/xml",
+    "application/xhtml+xml",
+    "application/x-www-form-urlencoded",
+  )
+  return ct.startswith(textual_prefixes)
 
 
 def should_skip_logging(path: str) -> bool:
-    """过滤不需要记录日志的路径"""
-    skip_prefixes = ("/logs", "/stream", "/api/image", "/send_notify")
-    return any(path.startswith(p) for p in skip_prefixes)
+  """过滤不需要记录日志的路径"""
+  skip_prefixes = ("/logs", "/stream", "/api/image", "/send_notify")
+  return any(path.startswith(p) for p in skip_prefixes)
 
 
 def safe_query_dict():
-    """安全解析 query，避免过长内容撑爆日志"""
-    raw = request.query_string.decode("utf-8", errors="replace")
-    if not raw:
-        return {}
+  """安全解析 query，避免过长内容撑爆日志"""
+  raw = request.query_string.decode("utf-8", errors="replace")
+  if not raw:
+    return {}
 
-    # parse_qs 输出 list，转成更可读的结构
-    parsed = parse_qs(raw, keep_blank_values=True)
+  # parse_qs 输出 list，转成更可读的结构
+  parsed = parse_qs(raw, keep_blank_values=True)
 
-    # 裁剪超长参数，避免打印 token / 大段内容
-    safe = {}
-    for k, v in parsed.items():
-        val = v[0] if v else ""
-        if len(val) > 200:
-            val = val[:200] + "...(省略)"
-        safe[k] = val
+  # 裁剪超长参数，避免打印 token / 大段内容
+  safe = {}
+  for k, v in parsed.items():
+    val = v[0] if v else ""
+    if len(val) > 200:
+      val = val[:200] + "...(省略)"
+    safe[k] = val
 
-    return safe
+  return safe
 
 
 # ==================================================
 # Flask 应用
 # ==================================================
 def create_app() -> Flask:
-    app = Flask(__name__)
+  app = Flask(__name__)
 
-    # 初始化数据库连接
-    with app.app_context():
-        init_database_connection()
+  # 初始化数据库连接
+  with app.app_context():
+    init_database_connection()
 
-    @app.before_request
-    def log_request():
-        """请求前日志记录"""
-        if should_skip_logging(request.path):
-            return
+  @app.before_request
+  def log_request():
+    """请求前日志记录"""
+    if should_skip_logging(request.path):
+      return
 
-        query_dict = safe_query_dict()
-        content_type = request.content_type or ""
+    query_dict = safe_query_dict()
+    content_type = request.content_type or ""
 
-        if "multipart/form-data" in content_type:
-            form_fields = {k: v for k, v in request.form.items()}
-            file_fields = {key: detect_file_type(file.filename) for key, file in request.files.items()}
-            body = {"form": form_fields, "files": file_fields}
-        else:
-            if is_textual_content(content_type):
-                try:
-                    data = request.get_data(as_text=True)
-                except UnicodeDecodeError:
-                    data = request.get_data()
-            else:
-                data = None
-            body = summarize_by_type(content_type, data)
+    if "multipart/form-data" in content_type:
+      form_fields = {k: v for k, v in request.form.items()}
+      file_fields = {key: detect_file_type(file.filename) for key, file in request.files.items()}
+      body = {"form": form_fields, "files": file_fields}
+    else:
+      if is_textual_content(content_type):
+        try:
+          data = request.get_data(as_text=True)
+        except UnicodeDecodeError:
+          data = request.get_data()
+      else:
+        data = None
+      body = summarize_by_type(content_type, data)
 
-        log_text = (
-            f"请求日志\n"
-            f"路径: {request.path}\n"
-            f"查询参数: {query_dict}\n"
-            f"请求体: {body}"
-        )
-        log_line(log_text)
+    log_text = (
+      f"请求日志\n"
+      f"路径: {request.path}\n"
+      f"查询参数: {query_dict}\n"
+      f"请求体: {body}"
+    )
+    log_line(log_text)
 
-    @app.after_request
-    def log_response(response):
-        """响应后日志记录"""
-        if should_skip_logging(request.path):
-            return response
+  @app.after_request
+  def log_response(response):
+    """响应后日志记录"""
+    if should_skip_logging(request.path):
+      return response
 
-        content_type = response.content_type or ""
+    content_type = response.content_type or ""
 
-        if "text/event-stream" in content_type:
-            body = "[SSE流]"
-        elif getattr(response, "direct_passthrough", False):
-            body = "[直接透传响应]"
-        elif not is_textual_content(content_type):
-            filename = (
-                response.headers.get("Content-Disposition", "")
-                    .replace("attachment;", "")
-                    .replace("filename=", "")
-                    .strip('" ')
-            )
-            if filename:
-                body = detect_file_type(filename)
-            else:
-                body = summarize_by_type(content_type, None)
-        else:
-            try:
-                data = response.get_data(as_text=True)
-                body = summarize_by_type(content_type, data)
-            except (RuntimeError, UnicodeDecodeError):
-                try:
-                    body = summarize_by_type(content_type, response.get_data())
-                except RuntimeError:
-                    body = "[响应内容不可读取]"
+    if "text/event-stream" in content_type:
+      body = "[SSE流]"
+    elif getattr(response, "direct_passthrough", False):
+      body = "[直接透传响应]"
+    elif not is_textual_content(content_type):
+      filename = (
+        response.headers.get("Content-Disposition", "")
+        .replace("attachment;", "")
+        .replace("filename=", "")
+        .strip('" ')
+      )
+      if filename:
+        body = detect_file_type(filename)
+      else:
+        body = summarize_by_type(content_type, None)
+    else:
+      try:
+        data = response.get_data(as_text=True)
+        body = summarize_by_type(content_type, data)
+      except (RuntimeError, UnicodeDecodeError):
+        try:
+          body = summarize_by_type(content_type, response.get_data())
+        except RuntimeError:
+          body = "[响应内容不可读取]"
 
-        log_text = (
-            f"响应日志\n"
-            f"路径: {request.path}\n"
-            f"状态: {response.status}\n"
-            f"响应体: {body}"
-        )
-        log_line(log_text)
+    log_text = (
+      f"响应日志\n"
+      f"路径: {request.path}\n"
+      f"状态: {response.status}\n"
+      f"响应体: {body}"
+    )
+    log_line(log_text)
 
-        return response
+    return response
 
-    # 注册蓝图
-    register_blueprints(app)
+  # 注册蓝图
+  register_blueprints(app)
 
-    # CORS
-    CORS(app, resources=r"/*")
+  # CORS
+  CORS(app, resources=r"/*")
 
-    return app
+  return app
 
 
 # ==================================================
