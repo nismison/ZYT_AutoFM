@@ -27,7 +27,7 @@ HEADERS_BASE = {
 }
 
 # ==================== 青龙配置 ====================
-QL_BASE_URL = "http://ql.zytsy.icu" if IS_DEV else "http://host.docker.internal:5700"
+QL_BASE_URL = "http://ql.zytsy.icu" if IS_DEV else "http://127.0.0.1:15700"
 QL_CLIENT_ID = "i-v-Y0pCCP1m"
 QL_CLIENT_SECRET = "l0_EIhFAT-m2EkvA3IdK3L6I"
 # ==================== immich配置 ====================
