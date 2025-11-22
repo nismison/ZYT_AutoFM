@@ -2,6 +2,7 @@ import logging
 
 import requests
 
+from apis.ql_api import QLApi
 from config import BASIC_TOKEN, FM_BASE_URL, HEADERS_BASE
 
 logger = logging.getLogger(__name__)
@@ -29,12 +30,8 @@ class FMApi:
 
     def init_token(self):
         logger.info("初始化Token中...")
-        fetch_url = f"{self.base}/auth/index?uri=/"
-        r1 = self.session.get(fetch_url, headers={"User-Agent": "VKStaffAssistant-Android"}, allow_redirects=False)
-        r2 = self.session.get(r1.headers['Location'], headers={"authorization": f"Bearer {BASIC_TOKEN}"},
-                              allow_redirects=False)
-        r3 = self.session.get(r2.headers['Location'], allow_redirects=False)
-        self.token = r3.cookies.get('token')
+        ql_api = QLApi()
+        self.token = ql_api.get_env("BAICHUAN_TOKEN").get("value", None)
         logger.info(f"Token 初始化完成 {self.token}")
 
     def get_headers(self):
