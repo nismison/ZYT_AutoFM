@@ -4,7 +4,7 @@ import requests
 
 from apis.ql_api import QLApi
 
-ql_api = QLApi()
+ql_api = QLApi(base_url="http://ql.zytsy.icu")
 
 
 def update_baichuan_token(zyt_token):
