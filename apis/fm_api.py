@@ -30,7 +30,7 @@ class FMApi:
 
     def init_token(self):
         logger.info("初始化Token中...")
-        ql_api = QLApi()
+        ql_api = QLApi(base_url="http://ql.zytsy.icu")
         self.token = ql_api.get_env("BAICHUAN_TOKEN").get("value", None)
         logger.info(f"Token 初始化完成 {self.token}")
 
