@@ -1,11 +1,13 @@
 import datetime
 import hashlib
 import hmac
+import json
 import logging
 import os
 import time
 import uuid
 
+from apis.ql_api import QLApi
 from config import FM_BASE_URL, HEADERS_BASE
 
 logger = logging.getLogger(__name__)
@@ -21,21 +23,26 @@ class OSSClient:
 
     def get_oss_policy(self):
         logger.info("初始化 COS 仓库...")
-        payload = {"directory": "h5-app", "businessType": "video", "durationSeconds": 1800}
-        headers = HEADERS_BASE.copy()
-        headers["Cookie"] = f"token={self.token}; x-tenant=10010"
-        url = f"{self.base}/file/sts/sts-token"
 
-        for i in range(3):
-            resp = self.session.post(url, json=payload, headers=headers)
-            if resp.status_code == 200 and str(resp.json().get('code')) == "200":
-                data = resp.json()['data']
-                self.oss = data
-                print(f">>>>>>>>>>self.oss: {self.oss}<<<<<<<<<<")
-                logger.info("COS 仓库初始化完成")
-                return data
-            time.sleep(1)
-        raise RuntimeError("获取 COS 临时凭证失败")
+        ql_api = QLApi(base_url="http://ql.zytsy.icu")
+        self.oss = json.loads(ql_api.get_env("COS_STS").get("value", "{}"))
+        return self.oss
+
+        # payload = {"directory": "h5-app", "businessType": "video", "durationSeconds": 1800}
+        # headers = HEADERS_BASE.copy()
+        # headers["Cookie"] = f"token={self.token}; x-tenant=10010"
+        # url = f"{self.base}/file/sts/sts-token"
+        #
+        # for i in range(3):
+        #     resp = self.session.post(url, json=payload, headers=headers)
+        #     if resp.status_code == 200 and str(resp.json().get('code')) == "200":
+        #         data = resp.json()['data']
+        #         self.oss = data
+        #         print(f">>>>>>>>>>self.oss: {self.oss}<<<<<<<<<<")
+        #         logger.info("COS 仓库初始化完成")
+        #         return data
+        #     time.sleep(1)
+        # raise RuntimeError("获取 COS 临时凭证失败")
 
     def upload(self, file_path):
         if not self.oss:
