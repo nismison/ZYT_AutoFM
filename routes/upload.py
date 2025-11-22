@@ -218,7 +218,11 @@ def upload_to_gallery_api():
         file = request.files.get('file')
         etag = request.form.get('etag', '')
         if not all([file, etag]):
-            return jsonify({"error": "缺少必要参数(file, etag)"}), 400
+            return jsonify({
+                "success": False,
+                "error": "缺少必要参数(file, etag)",
+                "data": None,
+            }), 400
 
         original_filename = secure_filename(file.filename)
         suffix = os.path.splitext(original_filename)[1].lower()
@@ -242,13 +246,20 @@ def upload_to_gallery_api():
         # 前端不等待 Immich 上传
         return jsonify({
             "success": True,
-            "message": "文件已加入上传队列，后端稍后自动上传 Immich"
+            "error": "",
+            "data": {
+                "message": "文件已加入上传队列，后端稍后自动上传 Immich"
+            }
         })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "data": None,
+        }), 500
 
 
 @bp.route("/api/add-review", methods=["POST"])
