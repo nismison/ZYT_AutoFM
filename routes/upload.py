@@ -211,6 +211,46 @@ def upload_to_gallery():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.route("/api/upload_to_gallery", methods=["POST"])
+def upload_to_gallery_api():
+    """上传到相册目录，加入后台队列异步上传 Immich"""
+    try:
+        file = request.files.get('file')
+        etag = request.form.get('etag', '')
+        if not all([file, etag]):
+            return jsonify({"error": "缺少必要参数(file, etag)"}), 400
+
+        original_filename = secure_filename(file.filename)
+        suffix = os.path.splitext(original_filename)[1].lower()
+
+        cache_dir = "/tmp/upload_cache"
+        os.makedirs(cache_dir, exist_ok=True)
+
+        unique_name = f"{uuid4().hex}_{original_filename}"
+        tmp_path = os.path.join(cache_dir, unique_name)
+        file.save(tmp_path)
+
+        # 写入任务队列
+        UploadTask.create(
+            tmp_path=tmp_path,
+            etag=etag,
+            original_filename=original_filename,
+            suffix=suffix,
+            status="pending"
+        )
+
+        # 前端不等待 Immich 上传
+        return jsonify({
+            "success": True,
+            "message": "文件已加入上传队列，后端稍后自动上传 Immich"
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @bp.route("/api/add-review", methods=["POST"])
 def add_review():
     """
