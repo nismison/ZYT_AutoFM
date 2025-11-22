@@ -28,10 +28,6 @@ class QLApi:
         if data.get("code") == 200 and "data" in data:
             self.token = data["data"]["token"]
             self.token_type = data["data"]["token_type"]
-
-            print(f"{'=' * 25} 青龙token {'=' * 25}")
-            print(self.token)
-            print("=" * 60)
         else:
             raise Exception(f"获取QL token失败: {data}")
 
@@ -50,7 +46,13 @@ class QLApi:
         params = {"searchValue": search_value}
         resp = requests.get(url, headers=self._headers(), params=params)
         resp.raise_for_status()
-        return resp.json()
+
+        env_data = resp.json()
+
+        if not env_data.get("data") or len(env_data["data"]) == 0:
+            return None
+
+        return env_data["data"][0]
 
     def update_env(self, name: str, value: str, remarks: str = "") -> bool:
         """
@@ -59,10 +61,10 @@ class QLApi:
         返回 True 表示更新成功
         """
         env_data = self.get_env(name)
-        if not env_data.get("data"):
+        if not env_data:
             raise Exception(f"未找到环境变量: {name}")
 
-        env_id = env_data["data"][0]["id"]
+        env_id = env_data["id"]
         url = f"{self.base_url}/open/envs"
         payload = {
             "id": env_id,
