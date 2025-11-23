@@ -135,17 +135,19 @@ def list_users():
     响应：
     {
       "success": true,
-      "data": [
-        {"id": 1, "name": "张三", "userNumber": "1234567"},
-        ...
-      ]
+      "data": {
+        "items": [
+          {"id": 1, "name": "张三", "userNumber": "1234567"},
+          ...
+        ]
+      }
     }
     """
     try:
         init_database_connection()
 
         users = list(UserInfo.select())
-        data = [
+        items = [
             {
                 "id": u.id,
                 "name": u.name,
@@ -156,7 +158,9 @@ def list_users():
 
         return jsonify({
             "success": True,
-            "data": data
+            "data": {
+                "items": items
+            }
         })
 
     except Exception as e:
