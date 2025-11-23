@@ -36,24 +36,32 @@ def get_watermark_pool() -> ProcessPoolExecutor:
 
 
 @bp.route("/api/check_uploaded", methods=["GET"])
-def check_uploaded():
+def check_uploaded_api():
     etag = request.args.get("etag", "").strip()
     if not etag:
-        return jsonify({"success": False, "error": "缺少etag"}), 400
-
-    record = (UploadRecord
-              .select()
-              .where(UploadRecord.etag == etag)
-              .order_by(UploadRecord.upload_time.desc())
-              .first())
-
-    if record:
         return jsonify({
-            "success": True,
-            "uploaded": True,
-        })
-    else:
-        return jsonify({"success": True, "uploaded": False})
+            "success": False,
+            "error": "缺少etag",
+            "data": None,
+        }), 400
+
+    record = (
+        UploadRecord
+        .select()
+        .where(UploadRecord.etag == etag)
+        .order_by(UploadRecord.upload_time.desc())
+        .first()
+    )
+
+    uploaded = record is not None
+
+    return jsonify({
+        "success": True,
+        "error": "",
+        "data": {
+            "uploaded": uploaded,
+        },
+    })
 
 
 @bp.route("/upload_with_watermark", methods=["POST"])
