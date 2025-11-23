@@ -72,6 +72,23 @@ class UploadTask(BaseModel):
         )
 
 
+class UserInfo(BaseModel):
+    """
+    用户信息表
+
+    - name: 用户姓名
+    - user_number: 7 位数字的用户编号（唯一）
+    """
+    name = CharField(max_length=100)
+    user_number = CharField(max_length=7, unique=True)
+
+    class Meta:
+        table_name = 'user_info'
+        indexes = (
+            (('user_number',), True),  # user_number 唯一索引
+        )
+
+
 # ---------------------------------------------------------
 #  连接 & 初始化函数（名字保持不变，方便你原来的调用）
 # ---------------------------------------------------------
@@ -99,5 +116,5 @@ def create_tables_once():
     主进程建表（如果你已经在 MySQL 中手动建好表，这里不会覆盖，只会在不存在时创建）。
     """
     init_database_connection()
-    _db.create_tables([UploadRecord, UploadTask], safe=True)
+    _db.create_tables([UploadRecord, UploadTask, UserInfo], safe=True)
     log_line("[INFO] MySQL 数据库表结构检查/初始化完成")

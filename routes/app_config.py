@@ -1,9 +1,11 @@
 from typing import Any, Dict
 
 import yaml
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from utils.logger import log_line
+from db import init_database_connection, UserInfo
+from peewee import IntegrityError
 
 bp = Blueprint("app_config", __name__)
 
@@ -49,6 +51,116 @@ def app_config():
 
     except Exception as e:
         log_line(f"[ERROR] APP配置接口错误: {repr(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"未知错误: {str(e)}",
+            "code": "UNKNOWN_ERROR"
+        }), 500
+
+
+# ---------------------------------------------------------
+#  新增接口：用户管理
+#  1) POST /api/users  新增用户
+#  2) GET  /api/users  查询全部用户
+# ---------------------------------------------------------
+
+@bp.route("/api/users", methods=["POST"])
+def create_user():
+    """
+    新增用户：
+    请求体 JSON:
+    {
+      "name": "张三",
+      "userNumber": "1234567"
+    }
+    """
+    try:
+        init_database_connection()
+
+        payload = request.get_json(silent=True) or {}
+        name = (payload.get("name") or "").strip()
+        user_number = str(payload.get("userNumber") or "").strip()
+
+        if not name:
+            return jsonify({
+                "success": False,
+                "error": "缺少姓名 name",
+                "code": "INVALID_PARAM"
+            }), 400
+
+        # 要求 7 位数字
+        if len(user_number) != 7 or not user_number.isdigit():
+            return jsonify({
+                "success": False,
+                "error": "userNumber 必须为 7 位数字",
+                "code": "INVALID_USER_NUMBER"
+            }), 400
+
+        user = UserInfo.create(
+            name=name,
+            user_number=user_number,
+        )
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "id": user.id,
+                "name": user.name,
+                "userNumber": user.user_number,
+            }
+        })
+
+    except IntegrityError:
+        # user_number 唯一约束冲突
+        log_line(f"[WARN] 尝试创建重复 userNumber: {request.get_json(silent=True)}")
+        return jsonify({
+            "success": False,
+            "error": "userNumber 已存在",
+            "code": "USER_NUMBER_EXISTS"
+        }), 400
+
+    except Exception as e:
+        log_line(f"[ERROR] 新增用户接口错误: {repr(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"未知错误: {str(e)}",
+            "code": "UNKNOWN_ERROR"
+        }), 500
+
+
+@bp.route("/api/users", methods=["GET"])
+def list_users():
+    """
+    查询所有已有用户（不分页，直接返回全部）
+    响应：
+    {
+      "success": true,
+      "data": [
+        {"id": 1, "name": "张三", "userNumber": "1234567"},
+        ...
+      ]
+    }
+    """
+    try:
+        init_database_connection()
+
+        users = list(UserInfo.select())
+        data = [
+            {
+                "id": u.id,
+                "name": u.name,
+                "userNumber": u.user_number,
+            }
+            for u in users
+        ]
+
+        return jsonify({
+            "success": True,
+            "data": data
+        })
+
+    except Exception as e:
+        log_line(f"[ERROR] 查询用户列表接口错误: {repr(e)}")
         return jsonify({
             "success": False,
             "error": f"未知错误: {str(e)}",
