@@ -1,6 +1,9 @@
 import os
 from datetime import datetime
 
+import pymysql
+pymysql.install_as_MySQLdb()  # 告诉 peewee 使用 PyMySQL 作为 MySQLdb
+
 from peewee import *
 
 from utils.logger import log_line
