@@ -61,6 +61,7 @@ def check_uploaded_api():
         "data": {
             "uploaded": uploaded,
         },
+        "uploaded": uploaded,
     })
 
 
