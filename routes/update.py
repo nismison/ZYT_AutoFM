@@ -68,12 +68,26 @@ def check_update():
     latest = find_latest_file()
     if not latest:
         return jsonify({
+            "success": True,
+            "data": {
+                "version": "0.0.0",
+                "now_url": "",
+                **config
+            },
+            # 兼容旧版
             "version": "0.0.0",
             "now_url": "",
             **config
         })
 
     return jsonify({
+        "success": True,
+        "data": {
+            "version": latest["version"],
+            "now_url": f"/api/download/{latest['filename']}",
+            **config
+        },
+        # 兼容旧版
         "version": latest["version"],
         "now_url": f"/api/download/{latest['filename']}",
         **config

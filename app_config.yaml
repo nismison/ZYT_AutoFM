@@ -6,5 +6,6 @@ auto_upload:
 
   # 排除的设备
   exclude_device_models:
+    - "redmi 24069RA21C"
     - "xiaomi 24069RA21C"
     - "huawei ADY-AL10"
