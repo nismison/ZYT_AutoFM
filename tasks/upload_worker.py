@@ -1,11 +1,15 @@
 import logging
 import os
 import shutil
+import sys
 import time
 from datetime import datetime
 
 from apis.immich_api import IMMICHApi
 from db import UploadTask, UploadRecord
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
 
 MAX_RETRY = 3
 FAILED_DIR = "storage/failed_uploads"
