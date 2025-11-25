@@ -50,9 +50,3 @@ def on_starting(server):
     """主进程：建表 + 设置 WAL"""
     from db import create_tables_once
     create_tables_once()
-
-
-def post_fork(server, worker):
-    """每个 worker：建立自己的数据库连接"""
-    from db import init_database_connection
-    init_database_connection()

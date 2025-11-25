@@ -2,10 +2,10 @@ from typing import Any, Dict
 
 import yaml
 from flask import Blueprint, jsonify, request
-
-from utils.logger import log_line
-from db import init_database_connection, UserInfo
 from peewee import IntegrityError
+
+from db import UserInfo
+from utils.logger import log_line
 
 bp = Blueprint("app_config", __name__)
 
@@ -75,8 +75,6 @@ def create_user():
     }
     """
     try:
-        init_database_connection()
-
         payload = request.get_json(silent=True) or {}
         name = (payload.get("name") or "").strip()
         user_number = str(payload.get("userNumber") or "").strip()
@@ -144,8 +142,6 @@ def list_users():
     }
     """
     try:
-        init_database_connection()
-
         users = list(UserInfo.select())
         items = [
             {

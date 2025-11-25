@@ -2,6 +2,7 @@ import logging.config
 import os
 
 from dotenv import load_dotenv
+from peewee import MySQLDatabase
 
 from utils.ip_address import get_real_lan_ip
 
@@ -13,13 +14,10 @@ LOG_PATH = "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
 # ==================== 自动工单配置 ====================
 BASE_URL = f"http://{get_real_lan_ip()}:5001" if IS_DEV else "https://api.zytsy.icu"
 BAICHUAN_PROXY_URL = f"http://{get_real_lan_ip()}:8000" if IS_DEV else "https://baichuan.zytsy.icu"
-# 基础 Token (从环境变量读取)
-BASIC_TOKEN = os.getenv("ZYT_TOKEN", "")
 
 FM_BASE_URL = "https://chuanplus-client.onewo.com/api/client"
 # 转发接口
 TARGET_BASE = "https://gw.4009515151.com"
-BAICHUAN_BASE = "https://chuanplus-client.onewo.com"
 
 HEADERS_BASE = {
     "Content-Type": "application/json",
@@ -40,6 +38,45 @@ GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'galler
 GALLERY_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery_cache')
 # 水印图片存储目录（定时清理）
 WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'watermark')
+
+# =========================
+# MySQL / Peewee 配置
+# =========================
+
+MYSQL_DB_NAME = os.getenv("MYSQL_DB_NAME", "uploads")
+MYSQL_DB_USER = os.getenv("MYSQL_DB_USER", "root")
+MYSQL_DB_PASSWORD = os.getenv("MYSQL_DB_PASSWORD", "c1a8d4fa5cb3016d")
+MYSQL_DB_HOST = os.getenv("MYSQL_DB_HOST", "83.229.123.98")
+MYSQL_DB_PORT = int(os.getenv("MYSQL_DB_PORT", "3306"))
+
+db = MySQLDatabase(
+    MYSQL_DB_NAME,
+    user=MYSQL_DB_USER,
+    password=MYSQL_DB_PASSWORD,
+    host=MYSQL_DB_HOST,
+    port=MYSQL_DB_PORT,
+    charset="utf8mb4",
+)
+
+# =========================
+# COS / STS 配置
+# =========================
+
+# QL 环境变量 key，可按需改成别的名字
+COS_STS_ENV_KEY = "COS_STS"
+
+# =========================
+# 分片上传相关常量
+# =========================
+# 文件状态
+FILE_STATUS_INIT = "INIT"
+FILE_STATUS_UPLOADING = "UPLOADING"
+FILE_STATUS_COMPLETED = "COMPLETED"
+
+# 会话状态
+SESSION_STATUS_UPLOADING = "UPLOADING"
+SESSION_STATUS_READY_TO_COMPLETE = "READY_TO_COMPLETE"
+SESSION_STATUS_COMPLETED = "COMPLETED"
 
 # ==================== 日志配置 ====================
 LOGGING_CONFIG = {

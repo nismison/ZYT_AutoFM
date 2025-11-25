@@ -3,7 +3,7 @@ import logging
 import requests
 
 from apis.ql_api import QLApi
-from config import BASIC_TOKEN, FM_BASE_URL, HEADERS_BASE
+from config import FM_BASE_URL, HEADERS_BASE
 
 logger = logging.getLogger(__name__)
 
