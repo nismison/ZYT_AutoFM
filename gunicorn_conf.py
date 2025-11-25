@@ -1,5 +1,3 @@
-import threading
-
 from utils.git_pull import git_pull
 
 # 项目目录
@@ -55,11 +53,6 @@ def on_starting(server):
 
 
 def post_fork(server, worker):
-    """启动后台上传进程"""
-    from tasks.upload_worker import task_worker
-    t = threading.Thread(target=task_worker, daemon=True)
-    t.start()
-
     """每个 worker：建立自己的数据库连接"""
     from db import init_database_connection
     init_database_connection()
