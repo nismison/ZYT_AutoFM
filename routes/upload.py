@@ -2,7 +2,6 @@ import os
 import random
 import shutil
 import tempfile
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -17,21 +16,6 @@ from utils.merge import merge_images_grid
 from utils.storage import generate_random_suffix, get_image_url, find_review_dir_by_filename
 
 bp = Blueprint("upload", __name__)
-
-WATERMARK_POOL = None
-
-
-def get_watermark_pool() -> ProcessPoolExecutor:
-    """
-    懒加载获取全局多进程池，避免 gunicorn preload 导致的共享问题
-
-    :returns: ProcessPoolExecutor 实例，每个 worker 进程内一份
-    """
-    global WATERMARK_POOL
-    if WATERMARK_POOL is None:
-        # 4C8G 基本可以跑满 4 进程图像任务；你也可以改为 3 试效果
-        WATERMARK_POOL = ProcessPoolExecutor(max_workers=4)
-    return WATERMARK_POOL
 
 
 @bp.route("/api/check_uploaded", methods=["GET"])
