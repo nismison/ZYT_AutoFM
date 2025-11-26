@@ -1,52 +1,42 @@
-from utils.git_pull import git_pull
+# gunicorn_conf.py
+# 仅用于配置 Gunicorn 参数，不做任何业务逻辑 / git / 建表操作
 
 # 项目目录
 chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
 
-# 指定进程数
+# worker 数量（根据 CPU 核心数和实际负载调节）
 workers = 4
 
-# 指定每个进程开启的线程数
+# 每个 worker 内部的线程数（对于 I/O 型任务可以适当增加）
 threads = 4
 
-# 启动用户
+# 运行用户
 user = 'www'
 
-# 启动模式
+# 启动模式：sync 足够，后面如果要 gevent/uvicorn_worker 再改
 worker_class = 'sync'
 
-# 绑定的ip与端口
+# 绑定地址
 bind = '0.0.0.0:5001'
 
-# 设置进程文件目录（用于停止服务和重启服务，请勿删除）
+# PID 文件（用于停止 / 重启）
 pidfile = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/gunicorn.pid'
 
-# 设置访问日志和错误信息日志路径
+# 日志路径
 accesslog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_acess.log'
 errorlog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log'
 
-# 日志级别，这个日志级别指的是错误日志的级别，而访问日志的级别无法设置
-# debug:调试级别，记录的信息最多；
-# info:普通级别；
-# warning:警告消息；
-# error:错误消息；
-# critical:严重错误消息；
+# 日志级别
 loglevel = 'info'
 
+# ============================
+# 一些推荐的健壮性配置
+# ============================
 
-# 自定义设置项请写到该处
-# 最好以上面相同的格式 <注释 + 换行 + key = value> 进行书写，
-# PS: gunicorn 的配置文件是python扩展形式，即".py"文件，需要注意遵从python语法，
-# 如：loglevel的等级是字符串作为配置的，需要用引号包裹起来
+# 单个请求最大处理时间，超时会杀掉 worker 重启，防止长时间阻塞
+timeout = 30
+graceful_timeout = 30
 
-# =========================================================
-# 🔧 自定义启动钩子：Gunicorn Master 启动时自动拉取最新代码
-# =========================================================
-
-
-def on_starting(server):
-    git_pull()
-
-    """主进程：建表 + 设置 WAL"""
-    from db import create_tables_once
-    create_tables_once()
+# 防止 worker 跑太久内存泄漏：到达一定请求数后自动重启
+max_requests = 1000
+max_requests_jitter = 100

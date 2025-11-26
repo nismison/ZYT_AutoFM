@@ -32,6 +32,7 @@ class BaseModel(Model):
     - File/UploadSession/UploadPart 之前多出来的 created_at/updated_at 列，即使已在数据库中存在，
       现在不再在模型中声明，也不会影响 Peewee 使用（多余列不会被查询）
     """
+
     class Meta:
         database = db
 
@@ -197,3 +198,7 @@ def init_db():
             [File, UploadSession, UploadPart, UploadRecord, UploadTask, UserInfo],
             safe=True,
         )
+
+
+if __name__ == '__main__':
+    create_tables_once()
