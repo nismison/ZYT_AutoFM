@@ -6,7 +6,7 @@ from flask import Flask, request
 from flask_cors import CORS
 
 from config import db
-from db import init_database_connection, create_tables_once
+from db import init_database_connection, create_tables_once, close_database_connection
 from routes import register_blueprints
 from utils.logger import log_line
 
@@ -195,10 +195,8 @@ def create_app() -> Flask:
         return response
 
     @app.teardown_request
-    def _db_close(exc):
-        if not db.is_closed():
-            db.close()
-            log_line(f"[INFO] MySQL DB 关闭完毕")
+    def _db_close(_):
+        close_database_connection()
 
     # 注册蓝图
     register_blueprints(app)

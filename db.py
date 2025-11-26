@@ -162,7 +162,13 @@ def init_database_connection():
     """
     if db.is_closed():
         db.connect(reuse_if_open=True)
-        log_line(f"[INFO] [PID {os.getpid()}] MySQL DB 连接建立完毕")
+
+def close_database_connection():
+    """
+    关闭数据库连接
+    """
+    if not db.is_closed():
+        db.close()
 
 
 def init_wal_mode():
