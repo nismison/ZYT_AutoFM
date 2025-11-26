@@ -11,7 +11,7 @@ workers = 4
 threads = 4
 
 # 运行用户
-user = 'www'
+user = 'root'
 
 # 启动模式：sync 足够，后面如果要 gevent/uvicorn_worker 再改
 worker_class = 'sync'

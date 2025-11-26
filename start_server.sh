@@ -37,22 +37,17 @@ cd "$REPO_PATH" || {
 }
 
 # ============================
-# 1. 强制同步最新代码（丢弃本地修改）
+# 1. 同步最新代码
 # ============================
-log "[INFO] 开始强制同步最新代码（丢弃本地修改）..."
+log "[INFO] 开始同步最新代码..."
 
-GIT_CMD="
-git reset --hard HEAD && \
-git clean -fd && \
-git fetch --all && \
-git reset --hard origin/master
-"
+GIT_CMD="git pull"
 
 # 使用 timeout 防止 git 卡死，失败时给出提示但不直接退出
 if ! timeout 30s bash -lc "$GIT_CMD"; then
   log "[WARNING] Git 强制拉取失败或超时，将继续使用当前代码版本。"
 else
-  log "[INFO] 代码已成功强制同步至 origin/master。"
+  log "[INFO] 代码已成功更新到最新。"
 fi
 
 # ============================
