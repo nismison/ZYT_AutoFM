@@ -29,10 +29,18 @@ def get_sts_token():
     """
     try:
         sts = get_cos_sts()
-        return jsonify({"success": True, "data": sts})
+        return jsonify({
+            "success": True,
+            "error": "",
+            "data": sts,
+        })
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"success": False, "error": f"获取 STS 失败: {e}"}), 500
+        return jsonify({
+            "success": False,
+            "error": f"获取 STS 失败: {e}",
+            "data": {},
+        }), 500
 
 
 # =========================
@@ -49,10 +57,37 @@ def upload_prepare():
       "chunk_size": 5242880,
       "total_chunks": 24
     }
-    返回：
-    - 已完成：{status: "COMPLETED", file_url: "..."}
-    - 新文件：{status: "NEW", cos_key, upload_id, uploaded_chunks: []}
-    - 断点续传：{status: "PARTIAL", cos_key, upload_id, uploaded_chunks: [1,2,...]}
+    返回 data 结构（已按前端统一规范包装）：
+    - 已完成：
+      {
+        "status": "COMPLETED",
+        "fingerprint": "...",
+        "file_url": "..."
+      }
+
+    - 新文件：
+      {
+        "status": "NEW",
+        "fingerprint": "...",
+        "cos_key": "...",
+        "upload_id": "...",
+        "chunk_size": 5242880,
+        "total_chunks": 24,
+        "uploaded_chunks": [],
+        "sts": {...}
+      }
+
+    - 断点续传 / 正在上传：
+      {
+        "status": "PARTIAL" | "UPLOADING",
+        "fingerprint": "...",
+        "cos_key": "...",
+        "upload_id": "...",
+        "chunk_size": 5242880,
+        "total_chunks": 24,
+        "uploaded_chunks": [1, 2, ...],
+        "sts": {...}
+      }
     """
     data = request.get_json(force=True, silent=True) or {}
 
@@ -63,7 +98,11 @@ def upload_prepare():
     total_chunks = data.get("total_chunks")
 
     if not all([fingerprint, file_name, file_size, chunk_size, total_chunks]):
-        return jsonify({"success": False, "error": "缺少必要参数"}), 400
+        return jsonify({
+            "success": False,
+            "error": "缺少必要参数",
+            "data": {}
+        }), 400
 
     try:
         # 每次准备上传时获取一轮最新 STS（含 bucketName / uploadPath 等）
@@ -83,14 +122,15 @@ def upload_prepare():
 
             # 已经上传完成，直接秒传返回
             if file.status == FILE_STATUS_COMPLETED and file.url:
-                return jsonify(
-                    {
-                        "success": True,
+                return jsonify({
+                    "success": True,
+                    "error": "",
+                    "data": {
                         "status": "COMPLETED",
                         "fingerprint": fingerprint,
                         "file_url": file.url,
                     }
-                )
+                })
 
             # 找/建上传会话
             session, sess_created = UploadSession.get_or_create(
@@ -131,9 +171,10 @@ def upload_prepare():
             else:
                 status = "PARTIAL" if uploaded_numbers else "UPLOADING"
 
-            return jsonify(
-                {
-                    "success": True,
+            return jsonify({
+                "success": True,
+                "error": "",
+                "data": {
                     "status": status,
                     "fingerprint": fingerprint,
                     "cos_key": file.cos_key,
@@ -144,10 +185,14 @@ def upload_prepare():
                     # 可选：顺带把 STS 也返回，前端少调一次 /sts/token
                     "sts": sts,
                 }
-            )
+            })
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"success": False, "error": f"服务器异常: {e}"}), 500
+        return jsonify({
+            "success": False,
+            "error": f"服务器异常: {e}",
+            "data": {}
+        }), 500
 
 
 # =========================
@@ -162,6 +207,14 @@ def chunk_complete():
       "part_number": 1,
       "etag": "xxxxx"
     }
+
+    成功时 data 结构：
+    {
+      "fingerprint": "...",
+      "uploaded_chunks": 10,
+      "total_chunks": 24,
+      "ready_to_complete": true/false
+    }
     """
     data = request.get_json(force=True, silent=True) or {}
     fingerprint = data.get("fingerprint")
@@ -169,18 +222,30 @@ def chunk_complete():
     etag = data.get("etag")
 
     if not all([fingerprint, part_number, etag]):
-        return jsonify({"success": False, "error": "缺少必要参数"}), 400
+        return jsonify({
+            "success": False,
+            "error": "缺少必要参数",
+            "data": {}
+        }), 400
 
     try:
         part_number = int(part_number)
-    except ValueError:
-        return jsonify({"success": False, "error": "part_number 必须是数字"}), 400
+    except (ValueError, TypeError):
+        return jsonify({
+            "success": False,
+            "error": "part_number 必须是数字",
+            "data": {}
+        }), 400
 
     try:
         file = File.get(File.fingerprint == fingerprint)
         session = UploadSession.get(UploadSession.file == file)
     except DoesNotExist:
-        return jsonify({"success": False, "error": "上传会话不存在"}), 404
+        return jsonify({
+            "success": False,
+            "error": "上传会话不存在",
+            "data": {}
+        }), 404
 
     try:
         with db.atomic():
@@ -211,19 +276,24 @@ def chunk_complete():
                 session.status = SESSION_STATUS_READY_TO_COMPLETE
             session.save()
 
-        return jsonify(
-            {
-                "success": True,
+        return jsonify({
+            "success": True,
+            "error": "",
+            "data": {
                 "fingerprint": fingerprint,
                 "uploaded_chunks": session.uploaded_chunks,
                 "total_chunks": session.total_chunks,
                 "ready_to_complete": session.status
                                      == SESSION_STATUS_READY_TO_COMPLETE,
             }
-        )
+        })
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"success": False, "error": f"服务器异常: {e}"}), 500
+        return jsonify({
+            "success": False,
+            "error": f"服务器异常: {e}",
+            "data": {}
+        }), 500
 
 
 # =========================
@@ -237,28 +307,53 @@ def upload_complete():
       "fingerprint": "..."
     }
     后端会从 DB 读取全部 part + etag 调用 COS 合并。
+
+    成功时 data 结构：
+    {
+      "status": "COMPLETED",
+      "file_url": "...",
+      "cos_key": "...",
+      "fingerprint": "..."
+    }
+
+    分片不完整时（业务失败）：
+    {
+      "uploaded_chunks": 10,
+      "total_chunks": 24
+    }
     """
     data = request.get_json(force=True, silent=True) or {}
     fingerprint = data.get("fingerprint")
 
     if not fingerprint:
-        return jsonify({"success": False, "error": "缺少 fingerprint"}), 400
+        return jsonify({
+            "success": False,
+            "error": "缺少 fingerprint",
+            "data": {}
+        }), 400
 
     try:
         file = File.get(File.fingerprint == fingerprint)
         session = UploadSession.get(UploadSession.file == file)
     except DoesNotExist:
-        return jsonify({"success": False, "error": "上传记录不存在"}), 404
+        return jsonify({
+            "success": False,
+            "error": "上传记录不存在",
+            "data": {}
+        }), 404
 
     # 幂等处理：如果已经是 COMPLETED，直接返回
     if file.status == FILE_STATUS_COMPLETED and file.url:
-        return jsonify(
-            {
-                "success": True,
+        return jsonify({
+            "success": True,
+            "error": "",
+            "data": {
                 "status": "COMPLETED",
                 "file_url": file.url,
+                "cos_key": file.cos_key,
+                "fingerprint": fingerprint,
             }
-        )
+        })
 
     # 查询所有已完成分片
     parts = (
@@ -272,14 +367,14 @@ def upload_complete():
     parts_list = list(parts)
 
     if len(parts_list) != session.total_chunks:
-        return jsonify(
-            {
-                "success": False,
-                "error": "分片数量不完整，无法合并",
+        return jsonify({
+            "success": False,
+            "error": "分片数量不完整，无法合并",
+            "data": {
                 "uploaded_chunks": len(parts_list),
                 "total_chunks": session.total_chunks,
             }
-        ), 400
+        }), 400
 
     cos_parts = [
         {"PartNumber": p.part_number, "ETag": p.etag} for p in parts_list
@@ -296,7 +391,7 @@ def upload_complete():
             UploadId=session.upload_id,
             MultipartUpload={"Part": cos_parts},
         )
-        # 这里可以按需检查 resp
+        # TODO: 如有需要，可以检查 resp
 
         file_url = build_file_url(file.cos_key, sts)
         file.url = file_url
@@ -306,17 +401,23 @@ def upload_complete():
         session.status = SESSION_STATUS_COMPLETED
         session.save()
 
-        return jsonify(
-            {
-                "success": True,
+        return jsonify({
+            "success": True,
+            "error": "",
+            "data": {
                 "status": "COMPLETED",
                 "file_url": file_url,
                 "cos_key": file.cos_key,
+                "fingerprint": fingerprint,
             }
-        )
+        })
     except Exception as e:
         traceback.print_exc()
         # 理论上这里可以补偿性调用 head_object 判断是否实际已合并成功
         file.status = FILE_STATUS_UPLOADING  # 先退回中间状态
         file.save()
-        return jsonify({"success": False, "error": f"COS 合并失败: {e}"}), 500
+        return jsonify({
+            "success": False,
+            "error": f"COS 合并失败: {e}",
+            "data": {}
+        }), 500
