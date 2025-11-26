@@ -97,6 +97,7 @@ class UploadRecord(BaseModel):
     original_filename = CharField(max_length=255, null=True)
     favorite = BooleanField(default=False)
     etag = CharField(max_length=32, null=True)
+    fingerprint = CharField(max_length=32, null=True)
     width = IntegerField()
     height = IntegerField()
     thumb = CharField(max_length=500, null=True)
@@ -163,6 +164,7 @@ def init_database_connection():
     if db.is_closed():
         db.connect(reuse_if_open=True)
 
+
 def close_database_connection():
     """
     关闭数据库连接
@@ -192,18 +194,6 @@ def create_tables_once():
         safe=True,
     )
     log_line("[INFO] MySQL 数据库表结构检查/初始化完成")
-
-
-def init_db():
-    """
-    分片上传模块使用的初始化函数。
-    保持原有函数名不变，同时也创建所有表。
-    """
-    with db:
-        db.create_tables(
-            [File, UploadSession, UploadPart, UploadRecord, UploadTask, UserInfo],
-            safe=True,
-        )
 
 
 if __name__ == '__main__':

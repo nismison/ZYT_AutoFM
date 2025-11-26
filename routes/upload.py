@@ -2,7 +2,6 @@ import os
 import random
 import shutil
 import tempfile
-import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -38,22 +37,73 @@ def get_watermark_pool() -> ProcessPoolExecutor:
 @bp.route("/api/check_uploaded", methods=["GET"])
 def check_uploaded_api():
     etag = request.args.get("etag", "").strip()
-    if not etag:
+    fingerprint = request.args.get("fingerprint", "").strip()
+
+    # 至少需要一个标识符
+    if not etag and not fingerprint:
         return jsonify({
             "success": False,
-            "error": "缺少etag",
+            "error": "缺少参数",
             "data": None,
         }), 400
 
-    record = (
-        UploadRecord
-        .select()
-        .where(UploadRecord.etag == etag)
-        .order_by(UploadRecord.upload_time.desc())
-        .first()
-    )
+    uploaded = False
 
-    uploaded = record is not None
+    # =========================
+    # 情况一：同时有 fingerprint 和 etag
+    # =========================
+    if fingerprint and etag:
+        # 1. 先用 fingerprint 查找
+        record = (
+            UploadRecord
+            .select()
+            .where(UploadRecord.fingerprint == fingerprint)
+            .order_by(UploadRecord.upload_time.desc())
+            .first()
+        )
+        if record is not None:
+            uploaded = True
+        else:
+            # 2. fingerprint 没命中，再用 etag 查找
+            record = (
+                UploadRecord
+                .select()
+                .where(UploadRecord.etag == etag)
+                .order_by(UploadRecord.upload_time.desc())
+                .first()
+            )
+            if record is not None:
+                uploaded = True
+                # 2.1 通过 etag 找到记录，并且本次带了 fingerprint，则回填
+                if getattr(record, "fingerprint", None) != fingerprint:
+                    record.fingerprint = fingerprint
+                    record.save()
+
+    # =========================
+    # 情况二：只有 fingerprint
+    # =========================
+    elif fingerprint:
+        record = (
+            UploadRecord
+            .select()
+            .where(UploadRecord.fingerprint == fingerprint)
+            .order_by(UploadRecord.upload_time.desc())
+            .first()
+        )
+        uploaded = record is not None
+
+    # =========================
+    # 情况三：只有 etag
+    # =========================
+    else:  # 只有 etag
+        record = (
+            UploadRecord
+            .select()
+            .where(UploadRecord.etag == etag)
+            .order_by(UploadRecord.upload_time.desc())
+            .first()
+        )
+        uploaded = record is not None
 
     return jsonify({
         "success": True,
