@@ -236,6 +236,7 @@ def upload_to_gallery():
     try:
         file = request.files.get('file')
         etag = request.form.get('etag', '')
+        fingerprint = request.form.get('fingerprint', '')
         if not all([file, etag]):
             return jsonify({"error": "缺少必要参数(file, etag)"}), 400
 
@@ -253,6 +254,7 @@ def upload_to_gallery():
         UploadTask.create(
             tmp_path=tmp_path,
             etag=etag,
+            fingerprint=fingerprint,
             original_filename=original_filename,
             suffix=suffix,
             status="pending"

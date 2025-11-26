@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import time
@@ -6,6 +5,7 @@ from datetime import datetime
 
 from apis.immich_api import IMMICHApi
 from db import UploadTask, UploadRecord
+from utils.logger import log_line
 
 MAX_RETRY = 3
 FAILED_DIR = "storage/failed_uploads"
@@ -18,7 +18,7 @@ def ensure_failed_dir():
 
 def task_worker():
     """后台异步上传 Immich（自动重试 + 写入 UploadRecord + 失败转存）"""
-    logging.log(msg=f"[INFO] 后台上传线程已启动 (PID={os.getpid()})", level=logging.INFO)
+    log_line(f"[INFO] 后台上传线程已启动 (PID={os.getpid()})")
 
     ensure_failed_dir()
     immich_api = IMMICHApi()
@@ -47,11 +47,11 @@ def task_worker():
 
             # ---- 上传开始 ----
             asset_id = immich_api.upload_to_immich_file(task.tmp_path)
-            logging.log(msg=f"上传Immich -> asset_id: {asset_id}", level=logging.INFO)
+            log_line(f"上传Immich -> asset_id: {asset_id}")
 
             # 添加到相册
             put_album = immich_api.put_assets_to_album(asset_id, "fa588b80-6b40-4607-8d6c-cd90101db9e9")
-            logging.log(msg=f"添加到相册 -> {'成功' if put_album else '失败'}", level=logging.INFO)
+            log_line(f"添加到相册 -> {'成功' if put_album else '失败'}")
 
             if asset_id:
                 # ========== 上传成功：写入 UploadRecord ==========
@@ -64,11 +64,12 @@ def task_worker():
                         width=0,  # 如需真实宽高你可以提取
                         height=0,
                         etag=task.etag,
+                        fingerprint=task.fingerprint,
                         device_model=None,
                         thumb=None,
                     )
                 except Exception as e:
-                    logging.log(msg=f"[INFO] 写 UploadRecord 失败: {e}", level=logging.ERROR)
+                    log_line(f"[INFO] 写 UploadRecord 失败: {e}")
 
                 # 更新任务状态
                 UploadTask.update(
@@ -82,7 +83,7 @@ def task_worker():
                 except FileNotFoundError:
                     pass
 
-                logging.log(msg=f"[INFO] 上传成功: {task.tmp_path}", level=logging.INFO)
+                log_line(f"[INFO] 上传成功: {task.tmp_path}")
                 continue
 
             # ---- 上传失败：自动重试 ----
@@ -100,7 +101,7 @@ def task_worker():
                     updated_at=datetime.now()
                 ).where(UploadTask.id == task.id).execute()
 
-                logging.log(msg=f"[ERROR] 多次失败，已转存至: {target}", level=logging.ERROR)
+                log_line(f"[ERROR] 多次失败，已转存至: {target}")
             else:
                 backoff = min(5 * new_retry, 20)
 
@@ -110,9 +111,8 @@ def task_worker():
                     updated_at=datetime.now()
                 ).where(UploadTask.id == task.id).execute()
 
-                logging.log(
-                    msg=f"[ERROR] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: {task.tmp_path}",
-                    level=logging.ERROR
+                log_line(
+                    f"[ERROR] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: {task.tmp_path}"
                 )
 
                 time.sleep(backoff)
@@ -120,7 +120,7 @@ def task_worker():
         except Exception as e:
             import traceback
             traceback.print_exc()
-            logging.log(msg=f"[ERROR] 异常: {e}", level=logging.ERROR)
+            log_line(f"[ERROR] 异常: {e}")
 
         time.sleep(0.1)
 

@@ -119,6 +119,7 @@ class UploadTask(BaseModel):
 
     tmp_path = CharField(max_length=500)  # 临时文件完整路径
     etag = CharField(max_length=32)  # 前端传入的校验
+    fingerprint = CharField(max_length=32)
     original_filename = CharField(max_length=255)
     suffix = CharField(max_length=10)  # 文件扩展名（.jpg/.png/.mp4）
     status = CharField(max_length=20, default="pending")
