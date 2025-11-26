@@ -4,7 +4,10 @@
 # 用于部署 / 启动 ZYT_AutoFM：
 # 1. 强制同步最新代码（丢弃本地修改）
 # 2. 通过 db.py 初始化数据库
-# 3. 启动 gunicorn
+# 3. 启动后台上传 Worker（upload_worker.py）
+# 4. 启动 Gunicorn
+
+set -euo pipefail
 
 # ============================
 # 基本路径配置（按需修改）
@@ -14,6 +17,11 @@ VENV_PY="/www/server/pyporject_evn/3820/bin/python3.8"
 GUNICORN_BIN="/www/server/pyporject_evn/3820/bin/gunicorn"
 GUNICORN_CONF="$REPO_PATH/gunicorn_conf.py"
 APP_MODULE="flask_server:app"
+
+# 日志路径
+WORKER_LOG="/www/wwwlogs/python/ZYT_AutoFM/upload_worker.log"
+
+echo "[INFO] 当前执行用户: $(whoami)"
 
 cd "$REPO_PATH" || {
   echo "[ERROR] 无法切换到项目目录: $REPO_PATH"
@@ -41,7 +49,6 @@ fi
 
 # ============================
 # 2. 初始化数据库（执行 db.py）
-#    显式使用 $REPO_PATH/db.py，避免路径混乱
 # ============================
 echo "[INFO] 执行 db.py 初始化数据库..."
 
@@ -53,7 +60,32 @@ fi
 echo "[INFO] 数据库初始化完成。"
 
 # ============================
-# 3. 启动 Gunicorn
+# 3. 启动后台上传 Worker（upload_worker.py）
+#    - 基于 REPO_PATH
+#    - 简单去重：已在跑则不重复启动
+# ============================
+WORKER_SCRIPT="$REPO_PATH/upload_worker.py"
+
+if [ -f "$WORKER_SCRIPT" ]; then
+  echo "[INFO] 检查 upload_worker.py 是否已在运行..."
+
+  # pgrep -f 会匹配完整命令行，这里用绝对路径降低误伤概率
+  EXISTING_PIDS=$(pgrep -f "$WORKER_SCRIPT" || true)
+
+  if [ -n "$EXISTING_PIDS" ]; then
+    echo "[INFO] 检测到运行中的 upload_worker.py，PIDs: $EXISTING_PIDS，跳过启动。"
+  else
+    echo "[INFO] 启动后台上传 Worker: $WORKER_SCRIPT"
+    mkdir -p "$(dirname "$WORKER_LOG")"
+    nohup "$VENV_PY" "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
+    echo "[INFO] upload_worker.py 已在后台启动，PID: $!"
+  fi
+else
+  echo "[WARNING] 未找到 $WORKER_SCRIPT，跳过上传 Worker 启动。"
+fi
+
+# ============================
+# 4. 启动 Gunicorn
 # ============================
 echo "[INFO] 启动 Gunicorn 服务..."
 echo "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
