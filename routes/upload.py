@@ -180,14 +180,8 @@ def upload_with_watermark():
             )
             result_meta.append((image_id, out_file))
 
-        pool = get_watermark_pool()
-        futures = []
         for args in task_args_list:
-            fut = pool.submit(watermark_runner, args)
-            futures.append(fut)
-
-        for fut in as_completed(futures):
-            fut.result()  # 如果有异常，这里会抛出，交给外层 except
+            watermark_runner(args)
 
         if merge and len(result_meta) > 1:
             merged = merge_images_grid([p for _, p in result_meta])
