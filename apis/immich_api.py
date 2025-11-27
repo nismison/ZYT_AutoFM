@@ -76,7 +76,7 @@ class IMMICHApi:
 
     def scan_external_library(self) -> bool:
         """触发 External Library 扫描，仅返回 True/False，不抛异常"""
-        url = f"{IMMICH_URL}/api/libraries/{IMMICH_LIBRARY_ID}/scan"
+        url = f"{IMMICH_URL}/libraries/{IMMICH_LIBRARY_ID}/scan"
         try:
             resp = requests.post(
                 url,
@@ -137,7 +137,7 @@ class IMMICHApi:
         if album_id is None:
             album_id = IMMICH_TARGET_ALBUM_ID
 
-        url = f"{IMMICH_URL}/api/albums/{album_id}/assets"
+        url = f"{IMMICH_URL}/albums/{album_id}/assets"
         payload = {"ids": [asset_id]}
 
         try:
