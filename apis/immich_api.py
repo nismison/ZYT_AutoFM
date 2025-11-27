@@ -100,7 +100,7 @@ class IMMICHApi:
 
     def find_asset_by_original_path(self, original_path: str):
         """通过 originalPath 查找资产，返回 asset_id 或 None"""
-        url = f"{IMMICH_URL}/api/search/metadata"
+        url = f"{IMMICH_URL}/search/metadata"
         payload = {
             "size": 1,
             "page": 1,
