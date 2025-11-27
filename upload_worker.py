@@ -25,7 +25,7 @@ def task_worker():
     immich_api = IMMICHApi()
 
     while True:
-        task = None  # 关键：每轮循环先初始化，避免在 except 里引用未赋值变量
+        task = None  # 每轮循环初始化，避免未赋值
 
         try:
             task = (
@@ -50,16 +50,35 @@ def task_worker():
             if rows == 0:
                 continue
 
-            # ========== Step 1: 把 tmp 文件挪到 External Library 目录 ==========
+            # ============================================================
+            # Step 1: 把 tmp 文件挪到 External Library 目录（改造点）
+            # ============================================================
             if not task.external_rel_path:
                 raise RuntimeError(f"任务 {task.id} 缺少 external_rel_path")
 
             host_target_path = os.path.join(IMMICH_EXTERNAL_HOST_ROOT, task.external_rel_path)
             os.makedirs(os.path.dirname(host_target_path), exist_ok=True)
 
-            # 原子移动，避免扫描到半写文件
-            shutil.move(task.tmp_path, host_target_path)
-            log_line(f"[INFO] 文件已移动到 External Library: {host_target_path}")
+            if os.path.exists(host_target_path):
+                # 目标文件已经存在：很可能是上一次已经 move 成功了，这次重试直接跳过 move
+                log_line(f"[INFO] 目标文件已存在，认为之前已移动完成: {host_target_path}")
+            else:
+                # 目标不存在，才需要从 tmp 移动
+                if not os.path.exists(task.tmp_path):
+                    # tmp 也不存在：这类任务无法恢复，标记 failed，不再重试
+                    log_line(
+                        f"[ERROR] 任务 {task.id} 的临时文件不存在且目标文件也不存在，无法恢复，直接标记失败: {task.tmp_path}"
+                    )
+                    UploadTask.update(
+                        status="failed",
+                        updated_at=datetime.now(),
+                        retry=task.retry + 1,
+                    ).where(UploadTask.id == task.id).execute()
+                    # 直接处理下一个任务
+                    continue
+
+                shutil.move(task.tmp_path, host_target_path)
+                log_line(f"[INFO] 文件已移动到 External Library: {host_target_path}")
 
             # Immich 容器内部看到的 originalPath
             immich_original_path = os.path.join(
@@ -67,12 +86,17 @@ def task_worker():
                 task.external_rel_path,
             )
 
-            # ========== Step 2: 触发 External Library 扫描 ==========
+            # ============================================================
+            # Step 2: 触发 External Library 扫描
+            # ============================================================
             ok = immich_api.scan_external_library()
             if not ok:
+                # 建议在 IMMICHApi.scan_external_library 里打印 status_code/resp.text
                 raise RuntimeError("触发 Immich 扫描 External Library 失败")
 
-            # ========== Step 3: 轮询 originalPath 拿 asset_id ==========
+            # ============================================================
+            # Step 3: 轮询 originalPath 拿 asset_id
+            # ============================================================
             asset_id = immich_api.wait_asset_by_original_path(
                 immich_original_path,
                 timeout=60,
@@ -83,11 +107,15 @@ def task_worker():
             if not asset_id:
                 raise RuntimeError("在 Immich 中未找到对应资产（轮询超时）")
 
-            # ========== Step 4: 添加到相册 ==========
+            # ============================================================
+            # Step 4: 添加到相册
+            # ============================================================
             put_album = immich_api.put_assets_to_album(asset_id, IMMICH_TARGET_ALBUM_ID)
             log_line(f"[INFO] 添加到相册 -> {'成功' if put_album else '失败'}")
 
-            # ========== Step 5: 写 UploadRecord ==========
+            # ============================================================
+            # Step 5: 写 UploadRecord
+            # ============================================================
             try:
                 UploadRecord.create(
                     oss_url="immich-external",
@@ -100,7 +128,7 @@ def task_worker():
                     fingerprint=task.fingerprint,
                     device_model=None,
                     thumb=None,
-                    # 可以在这里加 asset_id 字段（如果表里有）
+                    # 如果有 asset_id 字段可以在这里写入
                     # asset_id=asset_id,
                 )
             except Exception as e:
@@ -114,7 +142,7 @@ def task_worker():
                 .execute()
             )
 
-            # tmp_path 已经被 move，正常情况下这里不存在；保险起见再删一次
+            # tmp_path 正常情况下已经被 move，不存在；保险再删一次
             try:
                 if os.path.exists(task.tmp_path):
                     os.remove(task.tmp_path)
@@ -131,9 +159,11 @@ def task_worker():
 
             # 只有当本轮循环确实拿到了 task 时，才做重试逻辑
             if task is not None:
+                # 这里保留原来的重试逻辑，但注意：
+                # 如果上面已经处理了“tmp/目标都不存在”的情况，就不会走到这里
                 new_retry = task.retry + 1
                 if new_retry >= MAX_RETRY:
-                    # 多次失败 → 把当前文件搬到失败目录（如果还在 tmp）
+                    # 多次失败 → 把当前 tmp 文件搬到失败目录（如果还在）
                     src = getattr(task, "tmp_path", None)
                     if src and os.path.exists(src):
                         target = os.path.join(FAILED_DIR, f"{task.id}_{task.original_filename}")
