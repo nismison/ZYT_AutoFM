@@ -28,6 +28,7 @@ APP_MODULE="flask_server:app"
 
 # 日志路径
 WORKER_LOG="/www/wwwlogs/python/ZYT_AutoFM/upload_worker.log"
+MERGE_WORKER_LOG="/www/wwwlogs/python/ZYT_AutoFM/merge_worker.log"
 
 log "[INFO] 当前执行用户: $(whoami)"
 
