@@ -100,21 +100,26 @@ class IMMICHApi:
 
     def find_asset_by_original_path(self, original_path: str):
         """通过 originalPath 查找资产，返回 asset_id 或 None"""
-        url = f"{IMMICH_URL}/search/metadata"
+        url = f"{IMMICH_URL}/api/search/metadata"
         payload = {
             "size": 1,
             "page": 1,
             "originalPath": original_path,
             "withDeleted": False,
         }
-        resp = requests.post(url, headers=self.headers, json=payload)
+        resp = requests.post(url, headers=self.headers, json=payload, timeout=30)
+
         if resp.status_code != 200:
+            log_line(
+                f"[ERROR] find_asset_by_original_path 失败: status={resp.status_code}, body={resp.text}"
+            )
             return None
 
         data = resp.json()
         assets = data.get("assets", {}).get("items") or data.get("assets", [])
         if not assets:
             return None
+
         return assets[0].get("id")
 
     def wait_asset_by_original_path(
@@ -123,13 +128,20 @@ class IMMICHApi:
             timeout: int = 60,
             interval: float = 2.0,
     ):
-        """轮询等待 Immich 建立资产，超时返回 None"""
+        """轮询等待 Immich 建立资产，超时返回 None，不抛异常"""
         deadline = time.time() + timeout
         while time.time() < deadline:
             asset_id = self.find_asset_by_original_path(original_path)
             if asset_id:
+                log_line(
+                    f"[INFO] wait_asset_by_original_path 命中: originalPath={original_path}, asset_id={asset_id}"
+                )
                 return asset_id
             time.sleep(interval)
+
+        log_line(
+            f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}"
+        )
         return None
 
     def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:
