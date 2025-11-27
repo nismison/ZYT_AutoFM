@@ -1,6 +1,6 @@
 import time
 from io import BytesIO
-from typing import List
+from typing import List, Optional
 
 import requests
 from PIL import Image, UnidentifiedImageError
@@ -98,9 +98,8 @@ class IMMICHApi:
         )
         return False
 
-    def find_asset_by_original_path(self, original_path: str):
-        """通过 originalPath 查找资产，返回 asset_id 或 None"""
-        url = f"{IMMICH_URL}/search/metadata"
+    def find_asset_by_original_path(self, original_path: str) -> Optional[str]:
+        url = f"{IMMICH_URL}/search/metadata"  # IMMICH_URL 已包含 /api
         payload = {
             "size": 1,
             "page": 1,
@@ -126,8 +125,8 @@ class IMMICHApi:
             self,
             original_path: str,
             timeout: int = 60,
-            interval: float = 2.0,
-    ):
+            interval: float = 2,
+    ) -> Optional[str]:
         """轮询等待 Immich 建立资产，超时返回 None，不抛异常"""
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -139,9 +138,7 @@ class IMMICHApi:
                 return asset_id
             time.sleep(interval)
 
-        log_line(
-            f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}"
-        )
+        log_line(f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}")
         return None
 
     def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:

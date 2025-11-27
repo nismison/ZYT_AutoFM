@@ -105,7 +105,9 @@ def task_worker():
             log_line(f"[INFO] 扫描资产 originalPath={immich_original_path} → asset_id={asset_id}")
 
             if not asset_id:
-                raise RuntimeError("在 Immich 中未找到对应资产（轮询超时）")
+                raise RuntimeError(
+                    f"在 Immich 中未找到对应资产（轮询超时），original_path={immich_original_path}"
+                )
 
             # ============================================================
             # Step 4: 添加到相册
@@ -155,7 +157,7 @@ def task_worker():
         except Exception as e:
             import traceback
             traceback.print_exc()
-            log_line(f"[ERROR] 任务异常: {e}")
+            log_line(f"[ERROR] 任务异常类型: {type(e)}, repr={repr(e)}, str={e}")
 
             # 只有当本轮循环确实拿到了 task 时，才做重试逻辑
             if task is not None:
