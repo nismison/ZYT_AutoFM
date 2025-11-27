@@ -78,10 +78,7 @@ class IMMICHApi:
         """触发 External Library 扫描"""
         url = f"{IMMICH_URL}/libraries/{IMMICH_LIBRARY_ID}/scan"
         resp = requests.post(url, headers=self.headers, json={"refreshModifiedFiles": False})
-        if resp.status_code != 200:
-            log_line(f"[ERROR] scan_external_library 调用失败: status={resp.status_code}, body={resp.text}")
-            return False
-        return True
+        return resp.status_code == 204
 
     def find_asset_by_original_path(self, original_path: str):
         """通过 originalPath 查找资产，返回 asset_id 或 None"""
