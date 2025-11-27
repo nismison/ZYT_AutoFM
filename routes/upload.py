@@ -209,65 +209,8 @@ def upload_with_watermark():
 
 
 @bp.route("/upload_to_gallery", methods=["POST"])
-def upload_to_gallery():
-    """
-    上传文件到 Immich External Library 根目录，并加入后台队列：
-    - 文件直接保存到 IMMICH_EXTERNAL_HOST_ROOT 下（不创建子文件夹）
-    - 后台 task_worker 负责通知 Immich 扫描、等待生成 asset，加入相册并写 UploadRecord
-    """
-    try:
-        file = request.files.get("file")
-        etag = request.form.get("etag", "").strip()
-        fingerprint = request.form.get("fingerprint", "").strip()
-
-        if not file or not etag:
-            return jsonify({
-                "success": False,
-                "error": "缺少必要参数(file, etag)"
-            }), 400
-
-        original_filename = secure_filename(file.filename or "upload")
-        suffix = os.path.splitext(original_filename)[1].lower()
-
-        # External Library 根目录
-        os.makedirs(IMMICH_EXTERNAL_HOST_ROOT, exist_ok=True)
-
-        # 直接在根目录下生成唯一文件名
-        unique_name = f"{uuid4().hex}{suffix}"
-        save_path = os.path.join(IMMICH_EXTERNAL_HOST_ROOT, unique_name)
-
-        file.save(save_path)
-
-        # 在 External Library 中的“相对路径”，现在就是文件名本身
-        external_rel_path = unique_name
-
-        # 写入任务队列
-        UploadTask.create(
-            tmp_path=save_path,  # 这里就是真实磁盘路径，不再是 /tmp
-            etag=etag,
-            fingerprint=fingerprint,
-            original_filename=original_filename,
-            suffix=suffix,
-            status="pending",
-            external_rel_path=external_rel_path,
-        )
-
-        return jsonify({
-            "success": True,
-            "message": "文件已保存到相册目录，后台稍后自动导入 Immich",
-        })
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
-
-
 @bp.route("/api/upload_to_gallery", methods=["POST"])
-def upload_to_gallery_api():
+def upload_to_gallery():
     """
     上传文件到 Immich External Library 根目录，并加入后台队列：
     - 文件直接保存到 IMMICH_EXTERNAL_HOST_ROOT 下（不创建子文件夹）
