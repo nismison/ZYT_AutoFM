@@ -8,7 +8,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request, render_template
 from werkzeug.utils import secure_filename
 
-from config import WATERMARK_STORAGE_DIR
+from config import WATERMARK_STORAGE_DIR, IMMICH_EXTERNAL_HOST_ROOT
 from db import UploadRecord, UploadTask
 from tasks.watermark_task import watermark_runner
 from utils.logger import log_line
@@ -210,38 +210,40 @@ def upload_with_watermark():
 
 @bp.route("/upload_to_gallery", methods=["POST"])
 def upload_to_gallery():
-    """上传到相册目录，加入后台队列异步写入 External Library + 让 Immich 扫描"""
+    """
+    上传文件到 Immich External Library 根目录，并加入后台队列：
+    - 文件直接保存到 IMMICH_EXTERNAL_HOST_ROOT 下（不创建子文件夹）
+    - 后台 task_worker 负责通知 Immich 扫描、等待生成 asset，加入相册并写 UploadRecord
+    """
     try:
-        file = request.files.get('file')
-        etag = request.form.get('etag', '')
-        fingerprint = request.form.get('fingerprint', '')
+        file = request.files.get("file")
+        etag = request.form.get("etag", "").strip()
+        fingerprint = request.form.get("fingerprint", "").strip()
 
-        if not all([file, etag]):
-            return jsonify({"success": False, "error": "缺少必要参数(file, etag)"}), 400
+        if not file or not etag:
+            return jsonify({
+                "success": False,
+                "error": "缺少必要参数(file, etag)"
+            }), 400
 
-        original_filename = secure_filename(file.filename)
+        original_filename = secure_filename(file.filename or "upload")
         suffix = os.path.splitext(original_filename)[1].lower()
 
-        # 1. 先落到本地临时目录
-        cache_dir = "/tmp/upload_cache"
-        os.makedirs(cache_dir, exist_ok=True)
+        # External Library 根目录
+        os.makedirs(IMMICH_EXTERNAL_HOST_ROOT, exist_ok=True)
 
-        tmp_name = f"{uuid4().hex}_{original_filename}"
-        tmp_path = os.path.join(cache_dir, tmp_name)
-        file.save(tmp_path)
+        # 直接在根目录下生成唯一文件名
+        unique_name = f"{uuid4().hex}{suffix}"
+        save_path = os.path.join(IMMICH_EXTERNAL_HOST_ROOT, unique_name)
 
-        # 2. 约定一个 External Library 下的相对路径
-        #    例如: user_{user_number}/YYYY-MM-DD/<uuid><suffix>
-        #    这里你可以自己按业务改，比如带 user_number:
-        #    user_dir = f"user_{user_number}" if user_number else "unknown"
-        today = datetime.now().strftime("%Y-%m-%d")
-        rel_dir = os.path.join(today)  # 也可以加 user_xxx
-        rel_name = f"{uuid4().hex}{suffix}"  # 避免重名
-        external_rel_path = os.path.join(rel_dir, rel_name)
+        file.save(save_path)
 
-        # 3. 写入任务队列
+        # 在 External Library 中的“相对路径”，现在就是文件名本身
+        external_rel_path = unique_name
+
+        # 写入任务队列
         UploadTask.create(
-            tmp_path=tmp_path,
+            tmp_path=save_path,  # 这里就是真实磁盘路径，不再是 /tmp
             etag=etag,
             fingerprint=fingerprint,
             original_filename=original_filename,
@@ -252,48 +254,54 @@ def upload_to_gallery():
 
         return jsonify({
             "success": True,
-            "message": "文件已加入上传队列，后端稍后写入 External Library 并导入 Immich",
+            "message": "文件已保存到相册目录，后台稍后自动导入 Immich",
         })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e),
+        }), 500
+
 
 @bp.route("/api/upload_to_gallery", methods=["POST"])
 def upload_to_gallery_api():
-    """上传到相册目录，加入后台队列异步写入 External Library + 让 Immich 扫描"""
+    """
+    上传文件到 Immich External Library 根目录，并加入后台队列：
+    - 文件直接保存到 IMMICH_EXTERNAL_HOST_ROOT 下（不创建子文件夹）
+    - 后台 task_worker 负责通知 Immich 扫描、等待生成 asset，加入相册并写 UploadRecord
+    """
     try:
-        file = request.files.get('file')
-        etag = request.form.get('etag', '')
-        fingerprint = request.form.get('fingerprint', '')
+        file = request.files.get("file")
+        etag = request.form.get("etag", "").strip()
+        fingerprint = request.form.get("fingerprint", "").strip()
 
-        if not all([file, etag]):
-            return jsonify({"success": False, "error": "缺少必要参数(file, etag)"}), 400
+        if not file or not etag:
+            return jsonify({
+                "success": False,
+                "error": "缺少必要参数(file, etag)"
+            }), 400
 
-        original_filename = secure_filename(file.filename)
+        original_filename = secure_filename(file.filename or "upload")
         suffix = os.path.splitext(original_filename)[1].lower()
 
-        # 1. 先落到本地临时目录
-        cache_dir = "/tmp/upload_cache"
-        os.makedirs(cache_dir, exist_ok=True)
+        # External Library 根目录
+        os.makedirs(IMMICH_EXTERNAL_HOST_ROOT, exist_ok=True)
 
-        tmp_name = f"{uuid4().hex}_{original_filename}"
-        tmp_path = os.path.join(cache_dir, tmp_name)
-        file.save(tmp_path)
+        # 直接在根目录下生成唯一文件名
+        unique_name = f"{uuid4().hex}{suffix}"
+        save_path = os.path.join(IMMICH_EXTERNAL_HOST_ROOT, unique_name)
 
-        # 2. 约定一个 External Library 下的相对路径
-        #    例如: user_{user_number}/YYYY-MM-DD/<uuid><suffix>
-        #    这里你可以自己按业务改，比如带 user_number:
-        #    user_dir = f"user_{user_number}" if user_number else "unknown"
-        today = datetime.now().strftime("%Y-%m-%d")
-        rel_dir = os.path.join(today)  # 也可以加 user_xxx
-        rel_name = f"{uuid4().hex}{suffix}"  # 避免重名
-        external_rel_path = os.path.join(rel_dir, rel_name)
+        file.save(save_path)
 
-        # 3. 写入任务队列
+        # 在 External Library 中的“相对路径”，现在就是文件名本身
+        external_rel_path = unique_name
+
+        # 写入任务队列
         UploadTask.create(
-            tmp_path=tmp_path,
+            tmp_path=save_path,  # 这里就是真实磁盘路径，不再是 /tmp
             etag=etag,
             fingerprint=fingerprint,
             original_filename=original_filename,
@@ -304,13 +312,16 @@ def upload_to_gallery_api():
 
         return jsonify({
             "success": True,
-            "message": "文件已加入上传队列，后端稍后写入 External Library 并导入 Immich",
+            "message": "文件已保存到相册目录，后台稍后自动导入 Immich",
         })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e),
+        }), 500
 
 
 @bp.route("/api/add-review", methods=["POST"])

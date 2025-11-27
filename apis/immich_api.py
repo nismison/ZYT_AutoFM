@@ -75,7 +75,6 @@ class IMMICHApi:
             return False
 
     def scan_external_library(self) -> bool:
-        """触发 External Library 扫描，仅返回 True/False，不抛异常"""
         url = f"{IMMICH_URL}/libraries/{IMMICH_LIBRARY_ID}/scan"
         try:
             resp = requests.post(
@@ -85,25 +84,19 @@ class IMMICHApi:
                 timeout=30,
             )
         except Exception as e:
-            log_line(f"[ERROR] 调用 scan_external_library 请求异常: {e}")
+            log_line(f"[ERROR] 调用 scan_external_library 失败: {e}")
             return False
 
-        # Immich 这里规范是 204 No Content 为成功
         if resp.status_code == 204:
-            log_line("[INFO] scan_external_library 调用成功 (204)")
             return True
 
         log_line(
-            f"[ERROR] scan_external_library 调用失败: status={resp.status_code}, body={resp.text}"
+            f"[ERROR] scan_external_library 状态异常: status={resp.status_code}, body={resp.text}"
         )
         return False
 
     def find_asset_by_original_path(self, original_path: str) -> Optional[str]:
-        """
-        通过 originalPath 查找资产，返回 asset_id 或 None。
-        不抛异常，错误自己打日志。
-        """
-        url = f"{IMMICH_URL}/search/metadata"  # IMMICH_URL 已包含 /api
+        url = f"{IMMICH_URL}/search/metadata"
         payload = {
             "size": 1,
             "page": 1,
@@ -119,45 +112,29 @@ class IMMICHApi:
                 timeout=30,
             )
         except Exception as e:
-            log_line(f"[ERROR] find_asset_by_original_path 请求异常: {e}")
+            log_line(f"[ERROR] find_asset_by_original_path 请求失败: {e}")
             return None
 
         if resp.status_code != 200:
             log_line(
-                f"[ERROR] find_asset_by_original_path 失败: "
+                f"[ERROR] find_asset_by_original_path 状态异常: "
                 f"status={resp.status_code}, body={resp.text}"
             )
             return None
 
         try:
             data = resp.json()
-        except ValueError as e:
-            log_line(
-                f"[ERROR] find_asset_by_original_path JSON 解析失败: {e}, "
-                f"text={resp.text[:200]}"
-            )
+        except ValueError:
+            log_line(f"[ERROR] find_asset_by_original_path JSON 解析失败")
             return None
 
-        # 根据你提供的结构：
-        # data["assets"]["items"] 是 list
-        assets = data.get("assets")
-        if not assets:
-            return None
-
+        assets = data.get("assets") or {}
         items = assets.get("items") or []
         if not items:
             return None
 
-        first = items[0]  # 这里不会 KeyError(0)，因为 items 是 list
-
-        asset_id = first.get("id")
-        if not asset_id:
-            log_line(
-                f"[WARN] find_asset_by_original_path 找到资产但没有 id 字段: {first}"
-            )
-            return None
-
-        return asset_id
+        first = items[0]
+        return first.get("id")
 
     def wait_asset_by_original_path(
             self,
@@ -165,30 +142,20 @@ class IMMICHApi:
             timeout: int = 60,
             interval: float = 2,
     ) -> Optional[str]:
-        """
-        轮询等待 Immich 建立资产，超时返回 None，不抛异常。
-        """
         deadline = time.time() + timeout
         while time.time() < deadline:
             asset_id = self.find_asset_by_original_path(original_path)
             if asset_id:
                 log_line(
-                    f"[INFO] wait_asset_by_original_path 命中: "
-                    f"originalPath={original_path}, asset_id={asset_id}"
+                    f"[INFO] Immich 已创建资源: originalPath={original_path}, asset_id={asset_id}"
                 )
                 return asset_id
             time.sleep(interval)
 
-        log_line(
-            f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}"
-        )
+        log_line(f"[ERROR] 等待 Immich 创建资源超时: originalPath={original_path}")
         return None
 
-    def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:
-        """把单个 asset 加入相册，返回 True/False，并打印详细错误日志"""
-        if album_id is None:
-            album_id = IMMICH_TARGET_ALBUM_ID
-
+    def put_assets_to_album(self, asset_id: str, album_id: str) -> bool:
         url = f"{IMMICH_URL}/albums/{album_id}/assets"
         payload = {"ids": [asset_id]}
 
@@ -200,36 +167,13 @@ class IMMICHApi:
                 timeout=30,
             )
         except Exception as e:
-            log_line(f"[ERROR] put_assets_to_album 请求异常: {e}")
+            log_line(f"[ERROR] put_assets_to_album 请求失败: {e}")
             return False
 
-        # Immich API 文档：200 返回一个数组 [{ id, success, error? }]
-        # https://api.immich.app/endpoints/albums/addAssetsToAlbum :contentReference[oaicite:1]{index=1}
-        status = resp.status_code
-
-        try:
-            data = resp.json()
-        except ValueError:
-            data = None
-
-        if status not in (200, 201):
+        if resp.status_code not in (200, 201):
             log_line(
-                f"[ERROR] put_assets_to_album 失败: status={status}, body={data or resp.text}"
+                f"[ERROR] put_assets_to_album 状态异常: status={resp.status_code}, body={resp.text}"
             )
             return False
 
-        # data 形如: [{"id": "...uuid...", "success": true/false, "error": "duplicate"/...}]
-        if isinstance(data, list):
-            failed = [item for item in data if not item.get("success", False)]
-            if failed:
-                for item in failed:
-                    log_line(
-                        f"[ERROR] put_assets_to_album 单条失败: "
-                        f"id={item.get('id')}, error={item.get('error')}"
-                    )
-                return False
-
-        log_line(
-            f"[INFO] put_assets_to_album 成功: album_id={album_id}, asset_id={asset_id}, status={status}"
-        )
         return True
