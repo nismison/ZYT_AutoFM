@@ -65,7 +65,7 @@ log "[INFO] 数据库初始化完成。"
 # ============================
 # 3. 启动后台上传 Worker（upload_worker.py）
 #    - 基于 REPO_PATH
-#    - 简单去重：已在跑则不重复启动
+#    - 如果已在跑：先杀掉旧的，再启动新的
 # ============================
 WORKER_SCRIPT="$REPO_PATH/upload_worker.py"
 
@@ -76,13 +76,27 @@ if [ -f "$WORKER_SCRIPT" ]; then
   EXISTING_PIDS=$(pgrep -f "$WORKER_SCRIPT" || true)
 
   if [ -n "$EXISTING_PIDS" ]; then
-    log "[INFO] 检测到运行中的 upload_worker.py，PIDs: $EXISTING_PIDS，跳过启动。"
+    log "[INFO] 检测到运行中的 upload_worker.py，PIDs: $EXISTING_PIDS，准备重启..."
+
+    # 尝试优雅终止
+    kill $EXISTING_PIDS 2>/dev/null || true
+    sleep 2
+
+    # 如果还在，强制杀掉
+    STILL_PIDS=$(pgrep -f "$WORKER_SCRIPT" || true)
+    if [ -n "$STILL_PIDS" ]; then
+      log "[WARN] 进程未完全退出，执行 kill -9: $STILL_PIDS"
+      kill -9 $STILL_PIDS 2>/dev/null || true
+      sleep 1
+    fi
   else
-    log "[INFO] 启动后台上传 Worker: $WORKER_SCRIPT"
-    mkdir -p "$(dirname "$WORKER_LOG")"
-    nohup "$VENV_PY" "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
-    log "[INFO] upload_worker.py 已在后台启动，PID: $!"
+    log "[INFO] 未发现运行中的 upload_worker.py，直接启动。"
   fi
+
+  log "[INFO] 启动后台上传 Worker: $WORKER_SCRIPT"
+  mkdir -p "$(dirname "$WORKER_LOG")"
+  nohup "$VENV_PY" "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
+  log "[INFO] upload_worker.py 已在后台启动，PID: $!"
 else
   log "[WARNING] 未找到 $WORKER_SCRIPT，跳过上传 Worker 启动。"
 fi

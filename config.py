@@ -31,6 +31,14 @@ QL_CLIENT_SECRET = "l0_EIhFAT-m2EkvA3IdK3L6I"
 # ==================== immich配置 ====================
 IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'
 IMMICH_URL = 'https://immich.zytsy.icu/api' if IS_DEV else 'http://127.0.0.1:2283/api'
+# 宿主机上 External Library 对应的真实路径（你的服务看到的是这个）
+IMMICH_EXTERNAL_HOST_ROOT = "/immich-external-library"
+# Immich 容器里看到的同一目录路径（External Library Import Path 配的就是它）
+IMMICH_EXTERNAL_CONTAINER_ROOT = "/external"
+# 在 Immich 管理界面创建的 External Library 的 ID
+IMMICH_LIBRARY_ID = "f38fff60-df57-42e6-bfdc-e6164778714a"
+# 目标相册 ID（你原来写死的那个）
+IMMICH_TARGET_ALBUM_ID = "fa588b80-6b40-4607-8d6c-cd90101db9e9"
 
 # 相册图片存储目录（持久保存）
 GALLERY_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'gallery')

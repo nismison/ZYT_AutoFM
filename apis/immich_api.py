@@ -1,12 +1,16 @@
-import os
-from datetime import datetime
+import time
 from io import BytesIO
 from typing import List
 
 import requests
 from PIL import Image, UnidentifiedImageError
 
-from config import IMMICH_API_KEY, IMMICH_URL
+from config import (
+    IMMICH_API_KEY,
+    IMMICH_URL,
+    IMMICH_LIBRARY_ID,
+    IMMICH_TARGET_ALBUM_ID,
+)
 
 
 class IMMICHApi:
@@ -32,33 +36,6 @@ class IMMICHApi:
         except Exception as e:
             print(f"❌ 获取统计数据失败: {e}")
             return None
-
-    def upload_to_immich_file(self, file_path: str):
-        """上传文件到 Immich"""
-        stats = os.stat(file_path)
-        current_time = datetime.now().isoformat()
-
-        data = {
-            'deviceAssetId': f"{os.path.basename(file_path)}-{stats.st_mtime}",
-            'deviceId': 'python',
-            'fileCreatedAt': current_time,
-            'fileModifiedAt': current_time,
-            'isFavorite': 'false',
-        }
-
-        files = {
-            'assetData': open(file_path, 'rb')
-        }
-
-        try:
-            resp = requests.post(f"{IMMICH_URL}/assets", headers=self.headers, data=data, files=files)
-            try:
-                resp_json = resp.json()
-                return resp_json.get("id", None)
-            except Exception:
-                return None
-        finally:
-            files['assetData'].close()
 
     def verify_asset(self, asset_id: str):
         """验证immich资源"""
@@ -96,27 +73,52 @@ class IMMICHApi:
             print(f"❌ 获取原图失败: {e}")
             return False
 
-    def put_assets_to_album(self, asset_id: str, album_id: str):
-        """把资源添加到文件夹"""
-        data = {
-            'ids': [asset_id]
+    def scan_external_library(self) -> bool:
+        """触发 External Library 扫描"""
+        url = f"{IMMICH_URL}/libraries/{IMMICH_LIBRARY_ID}/scan"
+        resp = requests.post(url, headers=self.headers, json={"refreshModifiedFiles": False})
+        return resp.status_code == 200
+
+    def find_asset_by_original_path(self, original_path: str):
+        """通过 originalPath 查找资产，返回 asset_id 或 None"""
+        url = f"{IMMICH_URL}/search/metadata"
+        payload = {
+            "size": 1,
+            "page": 1,
+            "originalPath": original_path,
+            "withDeleted": False,
         }
+        resp = requests.post(url, headers=self.headers, json=payload)
+        if resp.status_code != 200:
+            return None
 
-        try:
-            resp = requests.put(f"{IMMICH_URL}/albums/{album_id}/assets", json=data, headers=self.headers)
+        data = resp.json()
+        assets = data.get("assets", {}).get("items") or data.get("assets", [])
+        if not assets:
+            return None
+        return assets[0].get("id")
 
-            print(resp.status_code)
-            if resp.status_code == 200:
-                print(resp.json())
-                if resp.json()[0].get("success", False):
-                    print("✅ 添加成功")
-                    return True
-                else:
-                    print(f"❌ 添加失败: {resp.json()[0].get('error', '未知错误')}")
-                    return False
-            else:
-                print(f"❌ 添加失败: Status Code -> {resp.status_code}")
-                return False
-        except Exception as e:
-            print(f"❌ 添加失败: Exception -> {e}")
-            return False
+    def wait_asset_by_original_path(
+            self,
+            original_path: str,
+            timeout: int = 60,
+            interval: float = 2.0,
+    ):
+        """轮询等待 Immich 建立资产，超时返回 None"""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            asset_id = self.find_asset_by_original_path(original_path)
+            if asset_id:
+                return asset_id
+            time.sleep(interval)
+        return None
+
+    def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:
+        """把单个 asset 加入相册"""
+        if album_id is None:
+            album_id = IMMICH_TARGET_ALBUM_ID
+
+        url = f"{IMMICH_URL}/albums/{album_id}/assets"
+        payload = {"ids": [asset_id]}
+        resp = requests.post(url, headers=self.headers, json=payload)
+        return resp.status_code in (200, 201)
