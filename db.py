@@ -121,6 +121,7 @@ class UploadTask(BaseModel):
     etag = CharField(max_length=32)  # 前端传入的校验
     fingerprint = CharField(max_length=32)
     original_filename = CharField(max_length=255)
+    device = CharField(max_length=100)
     external_rel_path = CharField(max_length=500, null=True)
     suffix = CharField(max_length=10)  # 文件扩展名（.jpg/.png/.mp4）
     status = CharField(max_length=20, default="pending")
