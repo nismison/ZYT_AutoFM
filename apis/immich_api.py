@@ -75,10 +75,28 @@ class IMMICHApi:
             return False
 
     def scan_external_library(self) -> bool:
-        """触发 External Library 扫描"""
-        url = f"{IMMICH_URL}/libraries/{IMMICH_LIBRARY_ID}/scan"
-        resp = requests.post(url, headers=self.headers, json={"refreshModifiedFiles": False})
-        return resp.status_code == 204
+        """触发 External Library 扫描，仅返回 True/False，不抛异常"""
+        url = f"{IMMICH_URL}/api/libraries/{IMMICH_LIBRARY_ID}/scan"
+        try:
+            resp = requests.post(
+                url,
+                headers=self.headers,
+                json={"refreshModifiedFiles": False},
+                timeout=30,
+            )
+        except Exception as e:
+            log_line(f"[ERROR] 调用 scan_external_library 请求异常: {e}")
+            return False
+
+        # Immich 这里规范是 204 No Content 为成功
+        if resp.status_code == 204:
+            log_line("[INFO] scan_external_library 调用成功 (204)")
+            return True
+
+        log_line(
+            f"[ERROR] scan_external_library 调用失败: status={resp.status_code}, body={resp.text}"
+        )
+        return False
 
     def find_asset_by_original_path(self, original_path: str):
         """通过 originalPath 查找资产，返回 asset_id 或 None"""
@@ -115,11 +133,51 @@ class IMMICHApi:
         return None
 
     def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:
-        """把单个 asset 加入相册"""
+        """把单个 asset 加入相册，返回 True/False，并打印详细错误日志"""
         if album_id is None:
             album_id = IMMICH_TARGET_ALBUM_ID
 
-        url = f"{IMMICH_URL}/albums/{album_id}/assets"
+        url = f"{IMMICH_URL}/api/albums/{album_id}/assets"
         payload = {"ids": [asset_id]}
-        resp = requests.post(url, headers=self.headers, json=payload)
-        return resp.status_code in (200, 201)
+
+        try:
+            resp = requests.put(
+                url,
+                headers=self.headers,
+                json=payload,
+                timeout=30,
+            )
+        except Exception as e:
+            log_line(f"[ERROR] put_assets_to_album 请求异常: {e}")
+            return False
+
+        # Immich API 文档：200 返回一个数组 [{ id, success, error? }]
+        # https://api.immich.app/endpoints/albums/addAssetsToAlbum :contentReference[oaicite:1]{index=1}
+        status = resp.status_code
+
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+
+        if status not in (200, 201):
+            log_line(
+                f"[ERROR] put_assets_to_album 失败: status={status}, body={data or resp.text}"
+            )
+            return False
+
+        # data 形如: [{"id": "...uuid...", "success": true/false, "error": "duplicate"/...}]
+        if isinstance(data, list):
+            failed = [item for item in data if not item.get("success", False)]
+            if failed:
+                for item in failed:
+                    log_line(
+                        f"[ERROR] put_assets_to_album 单条失败: "
+                        f"id={item.get('id')}, error={item.get('error')}"
+                    )
+                return False
+
+        log_line(
+            f"[INFO] put_assets_to_album 成功: album_id={album_id}, asset_id={asset_id}, status={status}"
+        )
+        return True
