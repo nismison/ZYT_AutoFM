@@ -1,5 +1,4 @@
-import os
-import datetime
+from datetime import datetime
 
 import pymysql
 from peewee import (
@@ -10,10 +9,10 @@ from peewee import (
     IntegerField,
     DateTimeField,
     ForeignKeyField,
-    TextField,
     BooleanField,
 )
-from config import db, FILE_STATUS_INIT
+
+from config import db
 from utils.logger import log_line
 
 # 告诉 peewee 使用 PyMySQL 作为 MySQLdb
@@ -42,44 +41,111 @@ class BaseModel(Model):
 # =========================
 
 class File(BaseModel):
+    """
+    文件主表：一条记录对应一个完整文件（通过 fingerprint 去重）
+
+    本地分片实现中，字段含义：
+      - fingerprint: 前端算好的文件指纹，用来做秒传 / 断点续传 / 去重
+      - file_name: 用户原始文件名
+      - file_size: 文件总大小（字节）
+      - cos_key: 最终文件名（不带路径），实际文件路径为 IMMICH_EXTERNAL_HOST_ROOT / cos_key
+      - status: 文件状态（例如 INIT / UPLOADING / COMPLETED），具体值由 config 中常量约定
+      - url: 合并完成后给前端访问用的 URL（可选）
+    """
     id = AutoField()
-    fingerprint = CharField(max_length=128, unique=True)
+
+    fingerprint = CharField(max_length=64, unique=True, index=True)
     file_name = CharField(max_length=255)
     file_size = BigIntegerField()
+
+    # 本地实现里不再是 COS key，而是最终文件名（例如 "<fingerprint>_original.mp4"）
     cos_key = CharField(max_length=512)
-    url = CharField(max_length=512, null=True)
-    status = CharField(max_length=32, default=FILE_STATUS_INIT)
+
+    # 具体取值由 config.FILE_STATUS_* 常量定义，这里不设默认值，全部在业务代码里显式赋值
+    status = CharField(max_length=32, index=True)
+
+    # worker 合并之后写入（比如 "/immich-external/<cos_key>"）
+    url = CharField(max_length=1024, null=True)
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
 
     class Meta:
-        table_name = "file"
+        table_name = "file"  # 如果你原库不是这个表名，可以改成原来的
 
 
 class UploadSession(BaseModel):
+    """
+    上传会话表：记录一次指纹/文件的“分片上传会话”
+
+    字段含义：
+      - file: 关联的 File 记录
+      - upload_id: COS 时代用的，这里保留字段兼容（本地实现可以不使用）
+      - chunk_size: 分片大小（字节）
+      - total_chunks: 总分片数
+      - uploaded_chunks: 已成功接收并记录到 UploadPart 的分片数量
+      - status: 会话状态（UPLOADING / READY_TO_COMPLETE / COMPLETED 等）
+    """
     id = AutoField()
-    file = ForeignKeyField(File, backref="sessions", on_delete="CASCADE")
-    upload_id = CharField(max_length=255, null=True)
+
+    file = ForeignKeyField(
+        File,
+        backref="sessions",
+        on_delete="CASCADE",
+    )
+
+    upload_id = CharField(max_length=255, null=True)  # 本地实现不用，可空
+
     chunk_size = IntegerField()
     total_chunks = IntegerField()
     uploaded_chunks = IntegerField(default=0)
-    status = CharField(max_length=32)
+
+    # 具体取值由 config.SESSION_STATUS_* 常量定义
+    status = CharField(max_length=32, index=True)
+
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
 
     class Meta:
         table_name = "upload_session"
-        # 不额外声明 indexes，避免和外键自动索引冲突
 
 
 class UploadPart(BaseModel):
+    """
+    分片表：记录每个分片的元数据
+
+    字段含义：
+      - file: 关联的 File 记录
+      - part_number: 分片序号（从 1 开始）
+      - etag: 这里用 MD5 摘要，便于后续排查问题（本地实现不用于 COS 校验）
+      - status: 分片状态（目前逻辑里只用 "DONE"）
+    """
     id = AutoField()
-    file = ForeignKeyField(File, backref="parts", on_delete="CASCADE")
+
+    file = ForeignKeyField(
+        File,
+        backref="parts",
+        on_delete="CASCADE",
+    )
+
     part_number = IntegerField()
-    etag = CharField(max_length=255)
-    status = CharField(max_length=32, default="DONE")
-    extra = TextField(null=True)
+    etag = CharField(max_length=64)
+    status = CharField(max_length=32, index=True)
+
+    created_at = DateTimeField(default=datetime.now)
 
     class Meta:
         table_name = "upload_part"
         indexes = (
-            # file + part_number 组合唯一
+            # 唯一索引：同一 file 下的同一个 part_number 只能有一条记录
             (("file", "part_number"), True),
         )
 
@@ -93,7 +159,7 @@ class UploadRecord(BaseModel):
     oss_url = CharField(max_length=500)
     file_size = IntegerField()
     device_model = CharField(max_length=100, null=True)
-    upload_time = DateTimeField(default=datetime.datetime.now)
+    upload_time = DateTimeField(default=datetime.now)
     original_filename = CharField(max_length=255, null=True)
     favorite = BooleanField(default=False)
     etag = CharField(max_length=32, null=True)
@@ -128,8 +194,8 @@ class UploadTask(BaseModel):
     # 状态：pending / processing / done / failed
 
     retry = IntegerField(default=0)  # 重试次数
-    created_at = DateTimeField(default=datetime.datetime.now)
-    updated_at = DateTimeField(default=datetime.datetime.now)
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(default=datetime.now)
 
     class Meta:
         table_name = "upload_task"

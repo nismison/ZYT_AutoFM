@@ -1,3 +1,5 @@
+import hashlib
+import os
 import traceback
 
 from flask import Blueprint, request, jsonify
@@ -10,42 +12,72 @@ from config import (
     FILE_STATUS_UPLOADING,
     SESSION_STATUS_UPLOADING,
     SESSION_STATUS_READY_TO_COMPLETE,
-    SESSION_STATUS_COMPLETED,
+    IMMICH_EXTERNAL_HOST_ROOT,
 )
 from db import File, UploadSession, UploadPart
-from utils.cos_utils import get_cos_client, build_cos_key, build_file_url, get_cos_sts
 
-# 定义蓝图
 bp = Blueprint("upload_chunk", __name__)
 
 
 # =========================
-# 基础接口：获取 STS（前端直传用）
+# 本地存储工具函数（命名规则与 merge_worker.py 保持一致）
 # =========================
-@bp.route("/api/sts/token", methods=["GET"])
-def get_sts_token():
+
+def ensure_immich_root():
     """
-    返回当前有效的 COS STS 信息。
+    确保 IMMICH_EXTERNAL_HOST_ROOT 目录存在。
     """
-    try:
-        sts = get_cos_sts()
-        return jsonify({
-            "success": True,
-            "error": "",
-            "data": sts,
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": f"获取 STS 失败: {e}",
-            "data": {},
-        }), 500
+    os.makedirs(IMMICH_EXTERNAL_HOST_ROOT, exist_ok=True)
+
+
+def get_chunk_path(fingerprint: str, part_number: int) -> str:
+    """
+    分片文件路径，规则与 merge_worker.py 完全一致：
+
+        /immich-external-library/<fingerprint>_<part_number>.part
+    """
+    filename = f"{fingerprint}_{part_number}.part"
+    return os.path.join(IMMICH_EXTERNAL_HOST_ROOT, filename)
+
+
+def get_final_filename(fingerprint: str, file_name: str) -> str:
+    """
+    合并后的最终文件名（不含路径），存到 File.cos_key 中。
+    与 merge_worker.py 的 get_final_file_path 配合使用：
+
+        final_path = IMMICH_EXTERNAL_HOST_ROOT / file.cos_key
+    """
+    safe_name = os.path.basename(file_name)
+    return f"{fingerprint}_{safe_name}"
+
+
+def save_chunk_file(file_storage, dst_path: str) -> int:
+    """
+    保存分片到本地，返回写入字节数。
+    """
+    ensure_immich_root()
+    tmp_path = dst_path + ".tmp"
+    file_storage.save(tmp_path)
+    size = os.path.getsize(tmp_path)
+    os.replace(tmp_path, dst_path)
+    return size
+
+
+def calc_md5(path: str) -> str:
+    """
+    计算分片文件 MD5，用于记录到 UploadPart.etag。
+    """
+    md5 = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            md5.update(chunk)
+    return md5.hexdigest()
 
 
 # =========================
 # 1. 准备上传 / 断点续传检查
 # =========================
+
 @bp.route("/api/upload/prepare", methods=["POST"])
 def upload_prepare():
     """
@@ -57,36 +89,35 @@ def upload_prepare():
       "chunk_size": 5242880,
       "total_chunks": 24
     }
-    返回 data 结构（已按前端统一规范包装）：
-    - 已完成：
+
+    返回 data 结构：
+    - 已完成（秒传）：
       {
         "status": "COMPLETED",
         "fingerprint": "...",
-        "file_url": "..."
+        "file_url": "...",
       }
 
     - 新文件：
       {
         "status": "NEW",
         "fingerprint": "...",
-        "cos_key": "...",
-        "upload_id": "...",
+        "file_name": "xxx.mp4",
+        "file_size": 123456,
         "chunk_size": 5242880,
         "total_chunks": 24,
         "uploaded_chunks": [],
-        "sts": {...}
       }
 
     - 断点续传 / 正在上传：
       {
         "status": "PARTIAL" | "UPLOADING",
         "fingerprint": "...",
-        "cos_key": "...",
-        "upload_id": "...",
+        "file_name": "xxx.mp4",
+        "file_size": 123456,
         "chunk_size": 5242880,
         "total_chunks": 24,
         "uploaded_chunks": [1, 2, ...],
-        "sts": {...}
       }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -105,22 +136,32 @@ def upload_prepare():
         }), 400
 
     try:
-        # 每次准备上传时获取一轮最新 STS（含 bucketName / uploadPath 等）
-        sts = get_cos_sts()
-        bucket = sts["bucketName"]
+        file_size = int(file_size)
+        chunk_size = int(chunk_size)
+        total_chunks = int(total_chunks)
+    except (ValueError, TypeError):
+        return jsonify({
+            "success": False,
+            "error": "file_size / chunk_size / total_chunks 必须是数字",
+            "data": {}
+        }), 400
 
+    try:
         with db.atomic():
+            # 用 fingerprint 做去重
+            final_filename = get_final_filename(fingerprint, file_name)
+
             file, created = File.get_or_create(
                 fingerprint=fingerprint,
                 defaults={
                     "file_name": file_name,
-                    "file_size": int(file_size),
-                    "cos_key": build_cos_key(fingerprint, file_name, sts),
+                    "file_size": file_size,
+                    "cos_key": final_filename,   # 最终合并后的文件名
                     "status": FILE_STATUS_INIT,
                 },
             )
 
-            # 已经上传完成，直接秒传返回
+            # 已经合并完成的文件，直接秒传
             if file.status == FILE_STATUS_COMPLETED and file.url:
                 return jsonify({
                     "success": True,
@@ -132,35 +173,31 @@ def upload_prepare():
                     }
                 })
 
-            # 找/建上传会话
-            session, sess_created = UploadSession.get_or_create(
+            # 找/建 UploadSession
+            session, _ = UploadSession.get_or_create(
                 file=file,
                 defaults={
-                    "upload_id": None,
-                    "chunk_size": int(chunk_size),
-                    "total_chunks": int(total_chunks),
+                    "upload_id": None,            # 本地实现无用，占位
+                    "chunk_size": chunk_size,
+                    "total_chunks": total_chunks,
                     "uploaded_chunks": 0,
                     "status": SESSION_STATUS_UPLOADING,
                 },
             )
 
-            # 确保已经有 upload_id（第一次会去 COS 初始化分片）
-            if not session.upload_id:
-                cos_client = get_cos_client(sts)
-                resp = cos_client.create_multipart_upload(
-                    Bucket=bucket,
-                    Key=file.cos_key,
-                )
-                session.upload_id = resp["UploadId"]
-                session.status = SESSION_STATUS_UPLOADING
+            # 如果前端配置变化，以最新请求为准
+            if session.chunk_size != chunk_size or session.total_chunks != total_chunks:
+                session.chunk_size = chunk_size
+                session.total_chunks = total_chunks
                 session.save()
 
             # 查询已上传分片
             uploaded_parts = (
-                UploadPart.select(UploadPart.part_number)
+                UploadPart
+                .select(UploadPart.part_number)
                 .where(
-                    (UploadPart.file == file)
-                    & (UploadPart.status == "DONE")
+                    (UploadPart.file == file) &
+                    (UploadPart.status == "DONE")
                 )
                 .order_by(UploadPart.part_number)
             )
@@ -177,13 +214,11 @@ def upload_prepare():
                 "data": {
                     "status": status,
                     "fingerprint": fingerprint,
-                    "cos_key": file.cos_key,
-                    "upload_id": session.upload_id,
+                    "file_name": file.file_name,
+                    "file_size": file.file_size,
                     "chunk_size": session.chunk_size,
                     "total_chunks": session.total_chunks,
                     "uploaded_chunks": uploaded_numbers,
-                    # 可选：顺带把 STS 也返回，前端少调一次 /sts/token
-                    "sts": sts,
                 }
             })
     except Exception as e:
@@ -196,35 +231,43 @@ def upload_prepare():
 
 
 # =========================
-# 2. 单个分片上传完成回调
+# 2. 单个分片上传（写入本地）
 # =========================
+
 @bp.route("/api/upload/chunk/complete", methods=["POST"])
 def chunk_complete():
     """
-    前端在 COS 上 upload_part 成功后回调：
-    {
-      "fingerprint": "...",
-      "part_number": 1,
-      "etag": "xxxxx"
-    }
+    分片上传到本地磁盘：
+    Content-Type: multipart/form-data
 
-    成功时 data 结构：
+    表单字段：
+      - fingerprint: 字符串
+      - part_number: 数字（从 1 开始）
+      - file: 分片二进制数据
+
+    本接口负责：
+      - 把分片写入 IMMICH_EXTERNAL_HOST_ROOT
+        => /immich-external-library/<fingerprint>_<part_number>.part
+      - 写入/更新 UploadPart 记录（etag = 分片 MD5）
+      - 更新 UploadSession.uploaded_chunks
+      - 在分片数量达到 total_chunks 时，把 Session 标记为 READY_TO_COMPLETE
+
+    返回 data 结构：
     {
       "fingerprint": "...",
       "uploaded_chunks": 10,
       "total_chunks": 24,
-      "ready_to_complete": true/false
+      "ready_to_merge": true/false
     }
     """
-    data = request.get_json(force=True, silent=True) or {}
-    fingerprint = data.get("fingerprint")
-    part_number = data.get("part_number")
-    etag = data.get("etag")
+    fingerprint = request.form.get("fingerprint")
+    part_number = request.form.get("part_number")
+    file_storage = request.files.get("file")
 
-    if not all([fingerprint, part_number, etag]):
+    if not all([fingerprint, part_number, file_storage]):
         return jsonify({
             "success": False,
-            "error": "缺少必要参数",
+            "error": "缺少必要参数（fingerprint / part_number / file）",
             "data": {}
         }), 400
 
@@ -243,13 +286,26 @@ def chunk_complete():
     except DoesNotExist:
         return jsonify({
             "success": False,
-            "error": "上传会话不存在",
+            "error": "上传会话不存在，请先调用 /api/upload/prepare",
             "data": {}
         }), 404
 
+    # 写入本地分片文件
+    try:
+        chunk_path = get_chunk_path(fingerprint, part_number)
+        save_chunk_file(file_storage, chunk_path)
+        etag = calc_md5(chunk_path)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"写入分片失败: {e}",
+            "data": {}
+        }), 500
+
     try:
         with db.atomic():
-            # 插入分片记录（幂等：如果已存在就忽略）
+            # 幂等：同一分片多次上传，保留第一条记录即可
             try:
                 UploadPart.create(
                     file=file,
@@ -258,15 +314,14 @@ def chunk_complete():
                     status="DONE",
                 )
             except IntegrityError:
-                # 已存在这个分片，视为成功
+                # 已经存在记录，视为成功
                 pass
 
-            # 重新统计已完成分片数量
             done_count = (
                 UploadPart.select()
                 .where(
-                    (UploadPart.file == file)
-                    & (UploadPart.status == "DONE")
+                    (UploadPart.file == file) &
+                    (UploadPart.status == "DONE")
                 )
                 .count()
             )
@@ -274,6 +329,8 @@ def chunk_complete():
             session.uploaded_chunks = done_count
             if done_count == session.total_chunks:
                 session.status = SESSION_STATUS_READY_TO_COMPLETE
+            else:
+                session.status = SESSION_STATUS_UPLOADING
             session.save()
 
         return jsonify({
@@ -283,8 +340,7 @@ def chunk_complete():
                 "fingerprint": fingerprint,
                 "uploaded_chunks": session.uploaded_chunks,
                 "total_chunks": session.total_chunks,
-                "ready_to_complete": session.status
-                                     == SESSION_STATUS_READY_TO_COMPLETE,
+                "ready_to_merge": session.status == SESSION_STATUS_READY_TO_COMPLETE,
             }
         })
     except Exception as e:
@@ -297,8 +353,9 @@ def chunk_complete():
 
 
 # =========================
-# 3. 所有分片上传完成，触发合并
+# 3. 所有分片上传完成，标记为待合并
 # =========================
+
 @bp.route("/api/upload/complete", methods=["POST"])
 def upload_complete():
     """
@@ -306,21 +363,33 @@ def upload_complete():
     {
       "fingerprint": "..."
     }
-    后端会从 DB 读取全部 part + etag 调用 COS 合并。
 
-    成功时 data 结构：
-    {
-      "status": "COMPLETED",
-      "file_url": "...",
-      "cos_key": "...",
-      "fingerprint": "..."
-    }
+    本地实现中，这个接口只负责：
+      - 校验分片数量是否完整；
+      - 如果完整，把 UploadSession.status 标记为 READY_TO_COMPLETE，
+        供 merge_worker.py 轮询合并。
 
-    分片不完整时（业务失败）：
-    {
-      "uploaded_chunks": 10,
-      "total_chunks": 24
-    }
+    返回 data 结构：
+    - 已合并完成（worker 已处理）：
+      {
+        "status": "COMPLETED",
+        "file_url": "...",
+        "fingerprint": "..."
+      }
+
+    - 分片齐全，等待合并：
+      {
+        "status": "PENDING_MERGE",
+        "fingerprint": "...",
+        "uploaded_chunks": 24,
+        "total_chunks": 24
+      }
+
+    - 分片不完整：
+      {
+        "uploaded_chunks": 10,
+        "total_chunks": 24
+      }
     """
     data = request.get_json(force=True, silent=True) or {}
     fingerprint = data.get("fingerprint")
@@ -342,7 +411,7 @@ def upload_complete():
             "data": {}
         }), 404
 
-    # 幂等处理：如果已经是 COMPLETED，直接返回
+    # 如果已经是 COMPLETED，说明 worker 已经完成合并
     if file.status == FILE_STATUS_COMPLETED and file.url:
         return jsonify({
             "success": True,
@@ -350,17 +419,16 @@ def upload_complete():
             "data": {
                 "status": "COMPLETED",
                 "file_url": file.url,
-                "cos_key": file.cos_key,
                 "fingerprint": fingerprint,
             }
         })
 
-    # 查询所有已完成分片
+    # 检查分片是否齐全
     parts = (
         UploadPart.select()
         .where(
-            (UploadPart.file == file)
-            & (UploadPart.status == "DONE")
+            (UploadPart.file == file) &
+            (UploadPart.status == "DONE")
         )
         .order_by(UploadPart.part_number)
     )
@@ -369,55 +437,38 @@ def upload_complete():
     if len(parts_list) != session.total_chunks:
         return jsonify({
             "success": False,
-            "error": "分片数量不完整，无法合并",
+            "error": "分片数量不完整，无法进入合并队列",
             "data": {
                 "uploaded_chunks": len(parts_list),
                 "total_chunks": session.total_chunks,
             }
         }), 400
 
-    cos_parts = [
-        {"PartNumber": p.part_number, "ETag": p.etag} for p in parts_list
-    ]
-
     try:
-        sts = get_cos_sts()
-        bucket = sts["bucketName"]
-        cos_client = get_cos_client(sts)
+        with db.atomic():
+            session.status = SESSION_STATUS_READY_TO_COMPLETE
+            session.uploaded_chunks = len(parts_list)
+            session.save()
 
-        resp = cos_client.complete_multipart_upload(
-            Bucket=bucket,
-            Key=file.cos_key,
-            UploadId=session.upload_id,
-            MultipartUpload={"Part": cos_parts},
-        )
-        # TODO: 如有需要，可以检查 resp
-
-        file_url = build_file_url(file.cos_key, sts)
-        file.url = file_url
-        file.status = FILE_STATUS_COMPLETED
-        file.save()
-
-        session.status = SESSION_STATUS_COMPLETED
-        session.save()
+            # file.status 至少标记为 UPLOADING，合并成功后由 worker 改为 COMPLETED
+            if file.status == FILE_STATUS_INIT:
+                file.status = FILE_STATUS_UPLOADING
+                file.save()
 
         return jsonify({
             "success": True,
             "error": "",
             "data": {
-                "status": "COMPLETED",
-                "file_url": file_url,
-                "cos_key": file.cos_key,
+                "status": "PENDING_MERGE",
                 "fingerprint": fingerprint,
+                "uploaded_chunks": session.uploaded_chunks,
+                "total_chunks": session.total_chunks,
             }
         })
     except Exception as e:
         traceback.print_exc()
-        # 理论上这里可以补偿性调用 head_object 判断是否实际已合并成功
-        file.status = FILE_STATUS_UPLOADING  # 先退回中间状态
-        file.save()
         return jsonify({
             "success": False,
-            "error": f"COS 合并失败: {e}",
+            "error": f"更新会话状态失败: {e}",
             "data": {}
         }), 500

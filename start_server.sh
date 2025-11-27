@@ -102,7 +102,47 @@ else
 fi
 
 # ============================
-# 4. 启动 Gunicorn
+# 4. 启动后台 Merge Worker（merge_worker.py）
+#    - 基于 REPO_PATH
+#    - 如果已在跑：先杀掉旧的，再启动新的
+# ============================
+MERGE_WORKER_SCRIPT="$REPO_PATH/merge_worker.py"
+
+if [ -f "$MERGE_WORKER_SCRIPT" ]; then
+  log "[INFO] 检查 merge_worker.py 是否已在运行..."
+
+  # pgrep -f 会匹配完整命令行，这里用绝对路径降低误伤概率
+  MERGE_EXISTING_PIDS=$(pgrep -f "$MERGE_WORKER_SCRIPT" || true)
+
+  if [ -n "$MERGE_EXISTING_PIDS" ]; then
+    log "[INFO] 检测到运行中的 merge_worker.py，PIDs: $MERGE_EXISTING_PIDS，准备重启..."
+
+    # 尝试优雅终止
+    kill $MERGE_EXISTING_PIDS 2>/dev/null || true
+    sleep 2
+
+    # 如果还在，强制杀掉
+    MERGE_STILL_PIDS=$(pgrep -f "$MERGE_WORKER_SCRIPT" || true)
+    if [ -n "$MERGE_STILL_PIDS" ]; then
+      log "[WARN] 进程未完全退出，执行 kill -9: $MERGE_STILL_PIDS"
+      kill -9 $MERGE_STILL_PIDS 2>/dev/null || true
+      sleep 1
+    fi
+  else
+    log "[INFO] 未发现运行中的 merge_worker.py，直接启动。"
+  fi
+
+  log "[INFO] 启动后台 Merge Worker: $MERGE_WORKER_SCRIPT"
+  mkdir -p "$(dirname "$MERGE_WORKER_LOG")"
+  nohup "$VENV_PY" "$MERGE_WORKER_SCRIPT" >> "$MERGE_WORKER_LOG" 2>&1 &
+  log "[INFO] merge_worker.py 已在后台启动，PID: $!"
+else
+  log "[WARNING] 未找到 $MERGE_WORKER_SCRIPT，跳过 Merge Worker 启动。"
+fi
+
+
+# ============================
+# 5. 启动 Gunicorn
 # ============================
 log "[INFO] 启动 Gunicorn 服务..."
 log "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
