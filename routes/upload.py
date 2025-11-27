@@ -262,53 +262,55 @@ def upload_to_gallery():
 
 @bp.route("/api/upload_to_gallery", methods=["POST"])
 def upload_to_gallery_api():
-    """上传到相册目录，加入后台队列异步上传 Immich"""
+    """上传到相册目录，加入后台队列异步写入 External Library + 让 Immich 扫描"""
     try:
         file = request.files.get('file')
         etag = request.form.get('etag', '')
+        fingerprint = request.form.get('fingerprint', '')
+
         if not all([file, etag]):
-            return jsonify({
-                "success": False,
-                "error": "缺少必要参数(file, etag)",
-                "data": None,
-            }), 400
+            return jsonify({"success": False, "error": "缺少必要参数(file, etag)"}), 400
 
         original_filename = secure_filename(file.filename)
         suffix = os.path.splitext(original_filename)[1].lower()
 
+        # 1. 先落到本地临时目录
         cache_dir = "/tmp/upload_cache"
         os.makedirs(cache_dir, exist_ok=True)
 
-        unique_name = f"{uuid4().hex}_{original_filename}"
-        tmp_path = os.path.join(cache_dir, unique_name)
+        tmp_name = f"{uuid4().hex}_{original_filename}"
+        tmp_path = os.path.join(cache_dir, tmp_name)
         file.save(tmp_path)
 
-        # 写入任务队列
+        # 2. 约定一个 External Library 下的相对路径
+        #    例如: user_{user_number}/YYYY-MM-DD/<uuid><suffix>
+        #    这里你可以自己按业务改，比如带 user_number:
+        #    user_dir = f"user_{user_number}" if user_number else "unknown"
+        today = datetime.now().strftime("%Y-%m-%d")
+        rel_dir = os.path.join(today)  # 也可以加 user_xxx
+        rel_name = f"{uuid4().hex}{suffix}"  # 避免重名
+        external_rel_path = os.path.join(rel_dir, rel_name)
+
+        # 3. 写入任务队列
         UploadTask.create(
             tmp_path=tmp_path,
             etag=etag,
+            fingerprint=fingerprint,
             original_filename=original_filename,
             suffix=suffix,
-            status="pending"
+            status="pending",
+            external_rel_path=external_rel_path,
         )
 
-        # 前端不等待 Immich 上传
         return jsonify({
             "success": True,
-            "error": "",
-            "data": {
-                "message": "文件已加入上传队列，后端稍后自动上传 Immich"
-            }
+            "message": "文件已加入上传队列，后端稍后写入 External Library 并导入 Immich",
         })
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "data": None,
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @bp.route("/api/add-review", methods=["POST"])
