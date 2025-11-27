@@ -99,6 +99,10 @@ class IMMICHApi:
         return False
 
     def find_asset_by_original_path(self, original_path: str) -> Optional[str]:
+        """
+        通过 originalPath 查找资产，返回 asset_id 或 None。
+        不抛异常，错误自己打日志。
+        """
         url = f"{IMMICH_URL}/search/metadata"  # IMMICH_URL 已包含 /api
         payload = {
             "size": 1,
@@ -106,20 +110,54 @@ class IMMICHApi:
             "originalPath": original_path,
             "withDeleted": False,
         }
-        resp = requests.post(url, headers=self.headers, json=payload, timeout=30)
+
+        try:
+            resp = requests.post(
+                url,
+                headers=self.headers,
+                json=payload,
+                timeout=30,
+            )
+        except Exception as e:
+            log_line(f"[ERROR] find_asset_by_original_path 请求异常: {e}")
+            return None
 
         if resp.status_code != 200:
             log_line(
-                f"[ERROR] find_asset_by_original_path 失败: status={resp.status_code}, body={resp.text}"
+                f"[ERROR] find_asset_by_original_path 失败: "
+                f"status={resp.status_code}, body={resp.text}"
             )
             return None
 
-        data = resp.json()
-        assets = data.get("assets", {}).get("items") or data.get("assets", [])
+        try:
+            data = resp.json()
+        except ValueError as e:
+            log_line(
+                f"[ERROR] find_asset_by_original_path JSON 解析失败: {e}, "
+                f"text={resp.text[:200]}"
+            )
+            return None
+
+        # 根据你提供的结构：
+        # data["assets"]["items"] 是 list
+        assets = data.get("assets")
         if not assets:
             return None
 
-        return assets[0].get("id")
+        items = assets.get("items") or []
+        if not items:
+            return None
+
+        first = items[0]  # 这里不会 KeyError(0)，因为 items 是 list
+
+        asset_id = first.get("id")
+        if not asset_id:
+            log_line(
+                f"[WARN] find_asset_by_original_path 找到资产但没有 id 字段: {first}"
+            )
+            return None
+
+        return asset_id
 
     def wait_asset_by_original_path(
             self,
@@ -127,18 +165,23 @@ class IMMICHApi:
             timeout: int = 60,
             interval: float = 2,
     ) -> Optional[str]:
-        """轮询等待 Immich 建立资产，超时返回 None，不抛异常"""
+        """
+        轮询等待 Immich 建立资产，超时返回 None，不抛异常。
+        """
         deadline = time.time() + timeout
         while time.time() < deadline:
             asset_id = self.find_asset_by_original_path(original_path)
             if asset_id:
                 log_line(
-                    f"[INFO] wait_asset_by_original_path 命中: originalPath={original_path}, asset_id={asset_id}"
+                    f"[INFO] wait_asset_by_original_path 命中: "
+                    f"originalPath={original_path}, asset_id={asset_id}"
                 )
                 return asset_id
             time.sleep(interval)
 
-        log_line(f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}")
+        log_line(
+            f"[WARN] wait_asset_by_original_path 超时: originalPath={original_path}"
+        )
         return None
 
     def put_assets_to_album(self, asset_id: str, album_id: str = None) -> bool:

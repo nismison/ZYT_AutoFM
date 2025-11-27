@@ -187,7 +187,8 @@ def task_worker():
                         .execute()
                     )
                     log_line(
-                        f"[ERROR] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: {getattr(task, 'tmp_path', '')}"
+                        f"[ERROR] 上传失败，将重试({new_retry}/{MAX_RETRY})，延迟 {backoff}s: "
+                        f"external_rel_path={getattr(task, 'external_rel_path', '')}"
                     )
                     time.sleep(backoff)
 
