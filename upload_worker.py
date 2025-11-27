@@ -122,7 +122,7 @@ def task_worker():
                     height=0,
                     etag=task.etag,
                     fingerprint=task.fingerprint,
-                    device_model=None,
+                    device_model=task.device,
                     thumb=None,
                     # 如果后面给 UploadRecord 加 asset_id 字段，可以写进去
                     # asset_id=asset_id,

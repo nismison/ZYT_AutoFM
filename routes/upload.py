@@ -220,6 +220,7 @@ def upload_to_gallery():
         file = request.files.get("file")
         etag = request.form.get("etag", "").strip()
         fingerprint = request.form.get("fingerprint", "").strip()
+        device = request.form.get("device", "").strip()
 
         if not file or not etag:
             return jsonify({
@@ -244,11 +245,12 @@ def upload_to_gallery():
 
         # 写入任务队列
         UploadTask.create(
-            tmp_path=save_path,  # 这里就是真实磁盘路径，不再是 /tmp
+            tmp_path=save_path,
             etag=etag,
             fingerprint=fingerprint,
             original_filename=original_filename,
             suffix=suffix,
+            device=device,
             status="pending",
             external_rel_path=external_rel_path,
         )
