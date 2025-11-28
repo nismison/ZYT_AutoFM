@@ -6,13 +6,15 @@ import shutil
 import time
 import traceback
 
+from apis.immich_api import IMMICHApi
 from config import (
     db,
     IMMICH_EXTERNAL_HOST_ROOT,
+    IMMICH_EXTERNAL_CONTAINER_ROOT,
     FILE_STATUS_COMPLETED,
     SESSION_STATUS_READY_TO_COMPLETE,
     SESSION_STATUS_COMPLETED,
-    SESSION_STATUS_UPLOADING,
+    SESSION_STATUS_UPLOADING, IMMICH_TARGET_ALBUM_ID,
 )
 from db import File, UploadSession, UploadPart
 from utils.logger import log_line
@@ -54,11 +56,24 @@ def get_final_file_path(file: File) -> str:
     return os.path.join(IMMICH_EXTERNAL_HOST_ROOT, filename)
 
 
+def get_immich_file_path(file: File) -> str:
+    """
+    构造最终合并后的immich的文件路径。
+
+    约定：File.cos_key 存储的是「最终文件名」（不带目录），
+    合并后的文件直接放到 IMMICH_EXTERNAL_CONTAINER_ROOT 根目录下：
+        /immich-external-library/<file.cos_key>
+    """
+    filename = file.cos_key  # 例如: "<fingerprint>_original.mp4"
+    return os.path.join(IMMICH_EXTERNAL_CONTAINER_ROOT, filename)
+
+
 # =========================
 # 合并逻辑
 # =========================
 
 def merge_one_session(session: UploadSession):
+    immich_api = IMMICHApi()
     file = session.file
 
     log_line(
@@ -139,6 +154,31 @@ def merge_one_session(session: UploadSession):
             f"[INFO] [merge_worker] 合并成功: session_id={session.id}, "
             f"fingerprint={file.fingerprint}, final_path={final_path}"
         )
+
+        # Step 2: 触发 External Library 扫描
+        if immich_api.scan_external_library():
+            log_line("[INFO] [merge_worker] External Library 扫描触发成功")
+        else:
+            raise RuntimeError("触发 Immich 扫描 External Library 失败")
+
+        immich_original_path = get_immich_file_path(file)
+
+        # Step 3: 轮询 originalPath 等待 Immich 建立 asset
+        asset_id = immich_api.wait_asset_by_original_path(
+            immich_original_path,
+            timeout=60,
+            interval=2.0,
+        )
+        log_line(f"[INFO] [merge_worker] 扫描资产 originalPath={immich_original_path} → asset_id={asset_id}")
+
+        if not asset_id:
+            raise RuntimeError("在 Immich 中未找到对应资产（轮询超时）")
+
+        # Step 4: 添加到相册
+        ok = immich_api.put_assets_to_album(asset_id, IMMICH_TARGET_ALBUM_ID)
+        if not ok:
+            raise RuntimeError("添加资源到相册失败")
+        log_line(f"[INFO] [merge_worker] 已添加到相册: album_id={IMMICH_TARGET_ALBUM_ID}, asset_id={asset_id}")
     except Exception as e:
         traceback.print_exc()
         log_line(
