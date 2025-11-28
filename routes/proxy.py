@@ -54,32 +54,23 @@ def proxy(subpath):
                 ok = ql.update_env("ZYT_TOKEN", access_token)
                 Notify().send(f"Token更新{'成功' if ok else '失败'}: ...{access_token[-10:] if access_token else ''}")
 
-        if original_path == "hulk/position/api/location/upload":
-            log_line(json.dumps(request.headers))
-            data = request.get_data(as_text=True)
-            data_json = json.loads(data)
-            name = data_json.get("employeeName")
-            phone = data_json.get("phoneNo")
-            user_number = data_json.get("staffId")
-            log_line(name)
-            log_line(phone)
-            log_line(user_number)
+        if original_path == "hulk/thor/api/report":
+            try:
+                log_line(json.dumps(request.headers))
+                log_line(request.headers.get("Authorization"))
+                data = request.get_data(as_text=True)
+                data_json = json.loads(data)
 
-            facilityPositionExtend = data_json.get("facilityPositionExtend", {})
-            uuid = facilityPositionExtend.get("deviceId")
-            device_model = facilityPositionExtend.get("deviceModel")
-            log_line(uuid)
-            log_line(device_model)
-
-        # if original_path == "galaxy/api/app/staff/favorite/module":
-        #     try:
-        #         data = resp.json() or {}
-        #         for item in data["result"] or []:
-        #             if "百川工单" in item["name"]:
-        #                 item["action_id"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
-        #                 item["action_url"] = f"{BAICHUAN_PROXY_URL}/api/client/auth/index?uri=/"
-        #         return jsonify(data), resp.status_code, out_headers
-        #     except Exception:
-        #         pass
+                reportList = data_json.get("reportList", [])
+                event_description = reportList[0].get("eventDescription")
+                if event_description == "启动APP":
+                    name = reportList[0].get("employeeName")
+                    phone = reportList[0].get("phoneNo")
+                    device_model = reportList[0].get("deviceModel")
+                    user_number = reportList[0].get("staffId")
+                    log_line(f"{name} {phone} {device_model} {user_number}")
+            except Exception as e:
+                log_line(f"解析上报数据失败: {repr(e)}")
+                pass
 
     return Response(resp.content, resp.status_code, out_headers)
