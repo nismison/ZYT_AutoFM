@@ -56,8 +56,7 @@ def proxy(subpath):
 
         if original_path == "hulk/thor/api/report":
             try:
-                log_line(json.dumps(request.headers))
-                log_line(request.headers.get("Authorization"))
+                log_line(json.dumps(request.headers.get("Authorization")))
                 data = request.get_data(as_text=True)
                 data_json = json.loads(data)
 
