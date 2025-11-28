@@ -211,8 +211,12 @@ class UserInfo(BaseModel):
     - name: 用户姓名
     - user_number: 7 位数字的用户编号（唯一）
     """
+    id = AutoField()
     name = CharField(max_length=100)
     user_number = CharField(max_length=7, unique=True)
+    token = CharField(max_length=500, null=True)
+    phone = CharField(max_length=1, null=True)
+    device_model = CharField(max_length=50, null=True)
 
     class Meta:
         table_name = "user_info"
