@@ -2,8 +2,8 @@ import logging
 
 import requests
 
-from apis.ql_api import QLApi
 from config import FM_BASE_URL, HEADERS_BASE
+from db import UserInfo
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,12 @@ class FMApi:
 
     def init_token(self):
         logger.info("初始化Token中...")
-        ql_api = QLApi(base_url="http://ql.zytsy.icu")
-        self.token = ql_api.get_env("BAICHUAN_TOKEN").get("value", None)
+        self.token = (
+            UserInfo
+            .select(UserInfo.baichuan_token)
+            .where(UserInfo.user_number == 2409840)
+            .scalar()
+        )
         logger.info(f"Token 初始化完成 {self.token}")
 
     def get_headers(self):

@@ -4,7 +4,6 @@ import requests
 from flask import Blueprint, request, Response
 from peewee import DoesNotExist
 
-from apis.ql_api import QLApi
 from config import TARGET_BASE
 from db import UserInfo
 from utils.logger import log_line
