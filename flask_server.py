@@ -18,12 +18,6 @@ def now() -> str:
     return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
 
 
-def truncate(text, limit=500):
-    if not text:
-        return ""
-    return text[:limit] + ("...（已截断）" if len(text) > limit else "")
-
-
 def detect_file_type(filename: str) -> str:
     """
     根据文件名后缀判断文件类型（用于 multipart/form-data）
@@ -52,7 +46,7 @@ def summarize_by_type(content_type, data):
         text = text.decode("utf-8", errors="replace")
 
     if not content_type:
-        return truncate(text)
+        return text
 
     ct = content_type.lower()
 
@@ -65,7 +59,7 @@ def summarize_by_type(content_type, data):
     if "multipart/form-data" in ct or "octet-stream" in ct:
         return "[文件]"
 
-    return truncate(text)
+    return text
 
 
 def is_textual_content(content_type: Optional[str]) -> bool:
