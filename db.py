@@ -215,6 +215,8 @@ class UserInfo(BaseModel):
     name = CharField(max_length=100)
     user_number = CharField(max_length=7, unique=True)
     token = CharField(max_length=500, null=True)
+    baichuan_token = CharField(max_length=500, null=True)
+    cos_token = CharField(max_length=2000, null=True)
     phone = CharField(max_length=1, null=True)
     device_model = CharField(max_length=50, null=True)
 
