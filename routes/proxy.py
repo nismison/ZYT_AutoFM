@@ -1,8 +1,11 @@
+import json
+
 import requests
 from flask import Blueprint, request, Response
 
 from apis.ql_api import QLApi
 from config import TARGET_BASE
+from utils.logger import log_line
 from utils.notification import Notify
 
 bp = Blueprint("proxy", __name__)
@@ -50,6 +53,23 @@ def proxy(subpath):
                 ql = QLApi()
                 ok = ql.update_env("ZYT_TOKEN", access_token)
                 Notify().send(f"Token更新{'成功' if ok else '失败'}: ...{access_token[-10:] if access_token else ''}")
+
+        if original_path == "hulk/position/api/location/upload":
+            log_line(json.dumps(request.headers))
+            data = request.get_data(as_text=True)
+            data_json = json.loads(data)
+            name = data_json.get("employeeName")
+            phone = data_json.get("phoneNo")
+            user_number = data_json.get("staffId")
+            log_line(name)
+            log_line(phone)
+            log_line(user_number)
+
+            facilityPositionExtend = data_json.get("facilityPositionExtend", {})
+            uuid = facilityPositionExtend.get("deviceId")
+            device_model = facilityPositionExtend.get("deviceModel")
+            log_line(uuid)
+            log_line(device_model)
 
         # if original_path == "galaxy/api/app/staff/favorite/module":
         #     try:
