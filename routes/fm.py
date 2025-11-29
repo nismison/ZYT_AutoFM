@@ -15,10 +15,10 @@ notify = Notify()
 @bp.route("/api/fm/complete", methods=["POST"])
 def complete_fm():
     payload = request.get_json(silent=True) or {}
-    keyword = payload.get("keyword", "").strip()
-    order_id = payload.get("order_id", "").strip()
-    user_name = payload.get("user_name", "").strip()
-    user_number = payload.get("user_number", "").strip()
+    keyword = (payload.get("keyword", "") or "").strip()
+    order_id = (payload.get("order_id", "") or "").strip()
+    user_name = (payload.get("user_name", "") or "").strip()
+    user_number = (payload.get("user_number", "") or "").strip()
 
     if not all([user_name, user_number]):
         return jsonify({
