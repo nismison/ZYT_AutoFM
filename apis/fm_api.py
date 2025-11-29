@@ -9,10 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class FMApi:
-    def __init__(self):
+    def __init__(self, user_number=2409840):
         self.session = requests.Session()
         self.token = ""
         self.base = FM_BASE_URL
+        self.user_number = str(user_number)
         self.init_token()
 
     def request(self, method, endpoint, retries=3, **kwargs):
@@ -33,7 +34,7 @@ class FMApi:
         self.token = (
             UserInfo
             .select(UserInfo.baichuan_token)
-            .where(UserInfo.user_number == 2409840)
+            .where(UserInfo.user_number == self.user_number)
             .scalar()
         )
         logger.info(f"Token 初始化完成 {self.token}")
