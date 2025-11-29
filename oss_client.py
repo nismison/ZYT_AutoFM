@@ -26,7 +26,7 @@ class OSSClient:
         self.oss = (
             UserInfo
             .select(UserInfo.cos_token)
-            .where(UserInfo.user_number == 2409840)
+            .where(UserInfo.user_number == "2409840")
             .scalar()
         )
         return self.oss
