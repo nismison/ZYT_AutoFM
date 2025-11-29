@@ -8,6 +8,7 @@ from .update import bp as update_bp
 from .upload import bp as upload_bp
 from .upload_chunk import bp as upload_chunk
 from .app_config import bp as app_config
+from .fm import bp as fm
 
 
 def register_blueprints(app: Flask):
@@ -19,3 +20,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(update_bp)
     app.register_blueprint(log_viewer_bp)
     app.register_blueprint(app_config)
+    app.register_blueprint(fm)

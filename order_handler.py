@@ -9,12 +9,12 @@ import uuid
 
 from peewee import DoesNotExist
 
-from apis.fm_api import FMApi
 from db import UserInfo
 from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_XFSS, order_template_DYL, order_template_TTFX
-from oss_client import OSSClient
 from tasks.watermark_task import add_watermark_to_image
+from utils.custom_raise import OrderNotFoundError, UserNotFoundError, RuleNotFoundError, ImageUploadError, \
+    PartialUploadError
 from utils.notification import Notify
 from utils.storage import get_random_template_file
 
@@ -225,6 +225,9 @@ class OrderHandler:
         - 在去重后的工单列表中查找 title 包含 keyword 的工单（取第一个）
         - 使用当前日期/时间生成水印，并传入 name 和 user_number
         - 启动工单、上传图片、提交工单、发送通知
+
+        成功：返回一个包含基本信息的 dict
+        失败：抛出 OrderHandlerError 子类异常，供上层接口捕获并返回给前端
         """
 
         # 0️⃣ 去重
@@ -236,8 +239,9 @@ class OrderHandler:
             None,
         )
         if not target_order:
-            logger.warning(f"未找到包含关键字【{keyword}】的工单")
-            return
+            msg = f"未找到包含关键字【{keyword}】的工单"
+            logger.warning(msg)
+            raise OrderNotFoundError(msg)
 
         title = target_order["title"]
         order_id = target_order["id"]
@@ -246,15 +250,17 @@ class OrderHandler:
         # 2️⃣ 获取规则
         rule = ORDER_RULES.get(title)
         if not rule:
-            logger.warning(f"未找到工单【{title}】对应的规则，无法处理")
-            return
+            msg = f"未找到工单【{title}】对应的规则，无法处理"
+            logger.warning(msg)
+            raise RuleNotFoundError(msg)
 
         # 3️⃣ 获取用户信息 → user_number
         try:
             user_info = UserInfo.get(UserInfo.name == user)
         except DoesNotExist:
-            logger.error(f"未找到用户【{user}】的用户信息记录，无法生成水印")
-            return
+            msg = f"未找到用户【{user}】的用户信息记录，无法生成水印"
+            logger.error(msg)
+            raise UserNotFoundError(msg)
 
         logger.info(
             f"按关键字完成工单: {title}[{order_id}], "
@@ -262,7 +268,8 @@ class OrderHandler:
         )
 
         # 4️⃣ 启动工单（与 _process_order 保持一致）
-        status == "3" and self.fm.start_order(order_id)
+        if status == "3":
+            self.fm.start_order(order_id)
 
         # 5️⃣ 获取时间配置，只用于决定生成几张图 / 模板序号
         times = rule["time_func"]() if "time_func" in rule else rule["times"]
@@ -295,7 +302,7 @@ class OrderHandler:
             )
             image_paths.append(tmp_path)
 
-        # 7️⃣ 上传图片
+        # 7️⃣ 上传图片（任意一张失败直接抛错）
         uploaded_urls = []
         for path in image_paths:
             try:
@@ -303,7 +310,15 @@ class OrderHandler:
                 uploaded_urls.append(url)
                 logger.info(f"[按关键字] 上传成功: {url}")
             except Exception as e:
-                logger.error(f"[按关键字] 上传失败: {e}")
+                msg = f"[按关键字] 上传失败: {e}"
+                logger.error(msg, exc_info=True)
+                # 清理已生成的临时文件再抛异常
+                for p in image_paths:
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+                raise ImageUploadError(msg) from e
 
         # 8️⃣ 清理临时文件
         for path in image_paths:
@@ -311,32 +326,31 @@ class OrderHandler:
                 os.remove(path)
                 logger.debug(f"[按关键字] 已删除临时文件: {path}")
             except Exception as e:
+                # 清理失败不视为致命错误，打个 warning 即可
                 logger.warning(f"[按关键字] 删除临时文件失败: {path}, {e}")
 
-        # 9️⃣ 提交工单（这里只简单判断，不做递归重试；需要可以按 _process_order 改成重试）
+        # 9️⃣ 提交工单
         if len(uploaded_urls) < len(times):
-            logger.warning(
-                f"[按关键字] 部分图片上传失败，未提交工单: {len(uploaded_urls)}/{len(times)}"
+            msg = (
+                f"[按关键字] 部分图片上传失败，未提交工单: "
+                f"{len(uploaded_urls)}/{len(times)}"
             )
-            return
+            logger.warning(msg)
+            raise PartialUploadError(msg)
 
         payload = rule["func"](order_id, *uploaded_urls)
         self.fm.submit_order(payload)
-        logger.info(f"[按关键字] 提交工单: {json.dumps(payload)}")
+        logger.info(f"[按关键字] 提交工单: {json.dumps(payload, ensure_ascii=False)}")
         self.notify.send(f"工单【{title}】已完成（按关键字触发）")
 
         logger.info(f"工单【{title}】按关键字处理完成 ✅")
 
-if __name__ == '__main__':
-    fm = FMApi()
-    oss = OSSClient(fm.session, fm.token)
-    handler = OrderHandler(fm, oss)
-
-    logging.info("开始获取待处理工单列表...")
-    deal_data = fm.get_need_deal_list()
-    records = deal_data.get("records", [])
-
-    if not records:
-        logging.info("没有待处理的工单")
-    else:
-        handler.complete_order_by_keyword(records, "天台风险", "梁振卓")
+        # 返回一些信息，方便接口直接用
+        return {
+            "order_id": order_id,
+            "title": title,
+            "keyword": keyword,
+            "user": user,
+            "user_number": user_info.user_number,
+            "upload_count": len(uploaded_urls),
+        }
