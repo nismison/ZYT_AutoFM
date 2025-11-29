@@ -1,18 +1,17 @@
-import json
-
 import requests
 from flask import Blueprint, request, Response
 from peewee import DoesNotExist
 
 from config import TARGET_BASE
 from db import UserInfo
+from utils.bind_info import fetch_bind_info, fetch_me_info
 from utils.logger import log_line
 from utils.notification import Notify
 
 bp = Blueprint("proxy", __name__)
 
 
-def upsert_user_info(user_number, name, phone, device_model, token):
+def upsert_user_info(token, user_number, name, phone, device_model, device_id):
     """
     按 user_number 执行 upsert：
     - 若存在：更新 token/name/phone/device_model
@@ -21,24 +20,26 @@ def upsert_user_info(user_number, name, phone, device_model, token):
     try:
         user = UserInfo.get(UserInfo.user_number == user_number)
         # 存在 → 更新
+        user.token = token
         user.name = name
         user.phone = phone
         user.device_model = device_model
-        user.token = token
+        user.device_id = device_id
         user.save()  # 只更新变动字段（peewee 自动对比）
-        log_line(f"[UserInfo] 更新用户: {user_number}")
+        log_line(f"[INFO] [UserInfo] 更新用户: {user_number}")
     except DoesNotExist:
         # 不存在 → 创建
         UserInfo.create(
+            token=token,
             user_number=user_number,
             name=name,
             phone=phone,
             device_model=device_model,
-            token=token,
+            device_id=device_id,
         )
-        log_line(f"[UserInfo] 创建新用户: {user_number}")
+        log_line(f"[INFO] [UserInfo] 创建新用户: {user_number}")
     except Exception as e:
-        log_line(f"[UserInfo] upsert 失败: {repr(e)}")
+        log_line(f"[ERROR] [UserInfo] upsert 失败: {repr(e)}")
 
 
 @bp.route('/redirect', defaults={'subpath': ''}, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -82,47 +83,28 @@ def proxy(subpath):
                 user_number = None
             if access_token and user_number:
                 try:
-                    rows = (
-                        UserInfo
-                        .update(token=access_token)
-                        .where(UserInfo.user_number == user_number)
-                        .execute()
-                    )
-                    if rows == 0:
-                        log_line(f"[UserInfo] 未找到 user_number={user_number} 的用户, 无法更新 token")
-                    else:
-                        log_line(f"[UserInfo] 更新 token 成功, user_number={user_number}")
-                        Notify().send(f"Token更新成功: ...{access_token[-10:] if access_token else ''}")
-                except Exception as e:
-                    log_line(f"[UserInfo] 更新 token 失败, user_number={user_number}, error={repr(e)}")
+                    # 获取设备绑定信息
+                    bind_info = fetch_bind_info(access_token)
+                    phone = bind_info.get("loginMobile")
+                    device_model = bind_info.get("deviceModel")
+                    device_id = bind_info.get("deviceID")
 
-        if original_path == "hulk/thor/api/report":
-            try:
-                token = request.headers.get("Authorization").split(" ")[1]
-                data = request.get_data(as_text=True)
-                data_json = json.loads(data)
+                    # 获取用户名
+                    name = fetch_me_info(access_token)
 
-                reportList = data_json.get("reportList", [])
-                event_description = reportList[0].get("eventDescription")
-
-                if event_description == "启动APP":
-                    name = reportList[0].get("employeeName")
-                    phone = reportList[0].get("phoneNo")
-                    device_model = reportList[0].get("deviceModel")
-                    user_number = str(reportList[0].get("staffId"))
-
-                    log_line(f"{name} {phone} {device_model} {user_number}")
-
-                    # 执行数据库 upsert
                     upsert_user_info(
+                        token=access_token,
                         user_number=user_number,
                         name=name,
                         phone=phone,
                         device_model=device_model,
-                        token=token,
+                        device_id=device_id,
                     )
+                    log_line(
+                        f"[INFO] [UserInfo] 用户信息 更新成功, {user_number} {name} {phone} {device_model} {device_id}")
+                    Notify().send(f"[{name}] Token更新成功: ...{access_token[-10:] if access_token else ''}")
 
-            except Exception as e:
-                log_line(f"解析上报数据失败: {repr(e)}")
+                except Exception as e:
+                    log_line(f"[INFO] [UserInfo] 更新 token 失败, user_number={user_number}, error={repr(e)}")
 
     return Response(resp.content, resp.status_code, out_headers)

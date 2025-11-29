@@ -219,6 +219,7 @@ class UserInfo(BaseModel):
     cos_token = CharField(max_length=2000, null=True)
     phone = CharField(max_length=1, null=True)
     device_model = CharField(max_length=50, null=True)
+    device_id = CharField(max_length=50, null=True)
 
     class Meta:
         table_name = "user_info"
