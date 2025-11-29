@@ -11,16 +11,33 @@ bp = Blueprint("fm", __name__)
 notify = Notify()
 
 
+# 完成工单
 @bp.route("/api/fm/complete", methods=["POST"])
 def complete_fm():
     payload = request.get_json(silent=True) or {}
     keyword = payload.get("keyword", "").strip()
+    order_id = payload.get("order_id", "").strip()
     user_name = payload.get("user_name", "").strip()
+    user_number = payload.get("user_number", "").strip()
 
-    if not all([keyword, user_name]):
+    if not all([user_name, user_number]):
         return jsonify({
             "success": False,
-            "error": "缺少关键字 keyword 或姓名 user_name",
+            "error": "缺少参数",
+            "code": "INVALID_PARAM"
+        }), 400
+
+    if all([keyword, order_id]):
+        return jsonify({
+            "success": False,
+            "error": "keyword和order_id不能同时使用",
+            "code": "ORDER_ALREADY_PROCESSED"
+        }), 400
+
+    if not keyword and not order_id:
+        return jsonify({
+            "success": False,
+            "error": "缺少参数",
             "code": "INVALID_PARAM"
         }), 400
 
@@ -31,12 +48,23 @@ def complete_fm():
     records = deal_data.get("records", [])
 
     try:
-        result = handler.complete_order_by_keyword(records, keyword, user_name)
-        return jsonify({
-            "success": True,
-            "error": "",
-            "data": result,
-        })
+        result = None
+        if keyword:
+            result = handler.complete_order_by_keyword(records, keyword, user_name, user_number)
+        if order_id:
+            result = handler.complete_order_by_id(records, order_id, user_name, user_number)
+        if result:
+            return jsonify({
+                "success": True,
+                "error": "",
+                "data": result,
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "未找到工单",
+                "code": "ORDER_NOT_FOUND"
+            }), 500
     except OrderNotFoundError as e:
         return jsonify({
             "success": False,
@@ -59,7 +87,7 @@ def complete_fm():
         }), 500
 
 
-@bp.route("/api/fm/users", methods=["GET"])
+@bp.route("/api/fm/users", methods=["POST"])
 def users_fm():
     try:
         users = list(UserInfo.select())
@@ -87,7 +115,7 @@ def users_fm():
 
 
 # 获取待接单工单
-@bp.route("/api/fm/pending_accept", methods=["GET"])
+@bp.route("/api/fm/pending_accept", methods=["POST"])
 def pending_accept_fm():
     try:
         payload = request.get_json(silent=True) or {}
@@ -115,7 +143,7 @@ def pending_accept_fm():
 
 
 # 获取待处理工单
-@bp.route("/api/fm/pending_process", methods=["GET"])
+@bp.route("/api/fm/pending_process", methods=["POST"])
 def pending_process_fm():
     try:
         payload = request.get_json(silent=True) or {}
@@ -143,7 +171,7 @@ def pending_process_fm():
 
 
 # 接单
-@bp.route("/api/fm/accept_task", methods=["GET"])
+@bp.route("/api/fm/accept_task", methods=["POST"])
 def accept_task_fm():
     try:
         payload = request.get_json(silent=True) or {}
@@ -170,7 +198,7 @@ def accept_task_fm():
 
 
 # 批量接单
-@bp.route("/api/fm/accept_muti_task", methods=["GET"])
+@bp.route("/api/fm/accept_muti_task", methods=["POST"])
 def accept_muti_task_fm():
     try:
         payload = request.get_json(silent=True) or {}
