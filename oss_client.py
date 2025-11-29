@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import hmac
+import json
 import logging
 import os
 import time
@@ -23,12 +24,14 @@ class OSSClient:
     def get_oss_policy(self):
         logger.info("初始化 COS 仓库...")
 
-        self.oss = (
+        _oss = (
             UserInfo
             .select(UserInfo.cos_token)
             .where(UserInfo.user_number == "2409840")
             .scalar()
         )
+
+        self.oss = json.loads(_oss)
         return self.oss
 
     def upload(self, file_path):
