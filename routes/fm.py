@@ -1,9 +1,14 @@
+import json
+from datetime import datetime
+
+import requests
 from flask import Blueprint, jsonify, request
 
 from apis.fm_api import FMApi
 from db import UserInfo
 from order_handler import OrderHandler
 from oss_client import OSSClient
+from utils.crypter import generate_random_coordinates
 from utils.custom_raise import *
 from utils.notification import Notify
 
@@ -96,6 +101,9 @@ def users_fm():
                 "id": u.id,
                 "name": u.name,
                 "userNumber": u.user_number,
+                "phone": u.phone,
+                "device_model": u.device_model,
+                "device_id": u.device_id,
             }
             for u in users
         ]
@@ -224,4 +232,144 @@ def accept_muti_task_fm():
             "success": False,
             "error": f"未知错误: {str(e)}",
             "code": "UNKNOWN_ERROR"
+        }), 500
+
+
+# 打卡记录
+@bp.route("/api/fm/checkin_record", methods=["POST"])
+def checkin_record_fm():
+    try:
+        payload = request.get_json(silent=True) or {}
+        user_number = payload.get("user_number", None)
+        phone = payload.get("phone", "")
+
+        if not all([user_number, phone]):
+            return jsonify({
+                "success": False,
+                "error": "缺少参数",
+            }), 500
+
+        fm = FMApi(user_number=user_number)
+
+        checkin_record = fm.checkin_record(phone)
+
+        return jsonify({
+            "success": True,
+            "data": checkin_record
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"未知错误: {str(e)}",
+            "code": "UNKNOWN_ERROR"
+        }), 500
+
+
+# 打卡
+@bp.route("/api/fm/checkin", methods=["POST"])
+def checkin_fm():
+    try:
+        payload = request.get_json(silent=True) or {}
+        phone = payload.get("phone", "")
+        device_model = payload.get("device_model", "")
+        device_uuid = payload.get("device_uuid", "")
+
+        if not all([phone, device_model, device_uuid]):
+            return jsonify({
+                "success": False,
+                "error": "缺少参数",
+            }), 500
+
+        # 获取当前时间并格式化
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        geo_data = generate_random_coordinates()
+
+        payload = {
+            "attendances": [
+                {
+                    "altitude": 800.0,
+                    "area": 1,
+                    "bssid": "96:03:0c:22:02:ff",
+                    "device_info": {
+                        "app_type": "lebang",
+                        "app_version": "6.36.0",
+                        "cid": "0",
+                        "imei": "",
+                        "lac": "0",
+                        "model": device_model,
+                        "os_type": "android",
+                        "os_version": "12",
+                        "serial": "unknown",
+                        "uuid": device_uuid
+                    },
+                    "faceCheckResult": 0,
+                    "gd_latitude": geo_data['la'],
+                    "gd_longitude": geo_data['lo'],
+                    "inspectionTime": current_time,
+                    "isBindPhone": True,
+                    "isGCJ02": True,
+                    "isLocalCache": True,
+                    "latitude": geo_data['la'],
+                    "longitude": geo_data['lo'],
+                    "mobile": phone,
+                    "moodAttendanceUser": True,
+                    "project_code": "6055006346",
+                    "project_name": "Q南宁中国锦园",
+                    "send_time": current_time,
+                    "source": "lebang",
+                    "ssid": "Belkin_ff02220c0396",
+                    "su_type": 0,
+                    "success": True,
+                    "takeImageType": 0,
+                    "time": current_time,
+                    "type": "-",
+                    "verticalAccuracy": 0.0
+                }
+            ]
+        }
+
+        headers = {
+            'User-Agent': "VKStaffAssistant-Android-6.36.0",
+            'Connection': "Keep-Alive",
+            'Accept-Encoding': "gzip",
+            'Content-Type': "application/json; charset=UTF-8",
+            'X-Version': "6.36.0",
+            'X-Platform': "Android",
+            'X-API-Version': "20250813",
+            'X-ORGC': "45010228",
+            'X-Channel': "vanke",
+            'X-isOld': "false",
+            'X-Mobile': phone,
+        }
+
+        response = requests.post(
+            url="https://api.vankeservice.com/api/app/staffs/saveSignedCard",
+            data=json.dumps(payload),
+            headers=headers
+        )
+
+        if response.status_code == 200:
+            response_json = response.json()
+
+            if response_json.get('code', -1) == 0:
+                return jsonify({
+                    "success": True,
+                    "data": None
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"{response_json.get('error', '未知错误')}",
+                }), 500
+
+        else:
+            return jsonify({
+                "success": False,
+                "error": "未知错误",
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"{str(e)}",
         }), 500

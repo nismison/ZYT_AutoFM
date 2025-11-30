@@ -22,7 +22,7 @@ class FMApi:
                 resp = self.session.request(method, endpoint, timeout=5, **kwargs)
                 if resp.status_code == 200:
                     data = resp.json()
-                    if str(data.get('code')) == '200':
+                    if str(data.get('code')) == '200' or data.get('error') is None:
                         return data
                 logger.warning(f"请求失败({i + 1}/{retries})：{resp.text[:100]}")
             except requests.exceptions.RequestException as e:
@@ -74,3 +74,10 @@ class FMApi:
     def submit_order(self, payload):
         url = f"{self.base}/order/task/action/close"
         return self.request("POST", url, json=payload, headers=self.get_headers())
+
+    def checkin_record(self, phone):
+        url = f"https://api.vankeservice.com/api/app/staffs/getTodayScheduleAndSignedCard"
+        return self.request("GET", url, headers={
+            **self.get_headers(),
+            "X-Mobile": phone
+        }).get("result", [])
