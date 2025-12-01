@@ -221,6 +221,7 @@ class UserInfo(BaseModel):
     device_model = CharField(max_length=50, null=True)
     device_id = CharField(max_length=50, null=True)
     token_expires = IntegerField(null=True)
+    baichuan_expires = IntegerField(null=True)
 
     class Meta:
         table_name = "user_info"
