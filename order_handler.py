@@ -5,12 +5,11 @@ import os
 import re
 import tempfile
 import uuid
+from typing import Optional, Literal, List
 
-from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
-    order_template_QC, order_template_XFSS, order_template_DYL, order_template_TTFX
+from order_template import *
 from tasks.watermark_task import add_watermark_to_image
-from utils.custom_raise import OrderNotFoundError, RuleNotFoundError, ImageUploadError, \
-    PartialUploadError
+from utils.custom_raise import *
 from utils.notification import Notify
 from utils.storage import get_random_template_file
 
@@ -105,6 +104,47 @@ ORDER_RULES = {
 }
 
 
+def init_template_pic_dirs(user_number: str, base_dir: str = "TemplatePic") -> None:
+    """
+    根据 ORDER_RULES 在 base_dir 下为指定用户创建目录结构。
+
+    :param user_number: 用户编号，例如 "332211"
+    :param base_dir: 根目录名，默认 "TemplatePic"
+    """
+    # 根目录，例如 TemplatePic
+    base_path = os.path.join(base_dir)
+    # 用户目录，例如 TemplatePic/332211
+    user_path = os.path.join(base_path, user_number)
+
+    # 先保证用户目录存在
+    os.makedirs(user_path, exist_ok=True)
+
+    # 遍历 ORDER_RULES 中的每一条规则
+    for rule in ORDER_RULES.values():
+        template_name = rule["template"]
+        image_count = rule["image_count"]
+
+        # 模板目录，例如 TemplatePic/332211/XFTD
+        template_dir = os.path.join(user_path, template_name)
+        os.makedirs(template_dir, exist_ok=True)
+
+        if template_name == "DYL":
+            # 创建楼栋文件夹
+            for ld in ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A9', 'A10', 'A11', 'A12', 'B1']:
+                ld_dir = os.path.join(template_dir, ld)
+                os.makedirs(ld_dir, exist_ok=True)
+
+                # 创建编号子目录：1, 2, ..., image_count
+                for i in range(1, image_count + 1):
+                    image_dir = os.path.join(ld_dir, str(i))
+                    os.makedirs(image_dir, exist_ok=True)
+        else:
+            # 创建编号子目录：1, 2, ..., image_count
+            for i in range(1, image_count + 1):
+                image_dir = os.path.join(template_dir, str(i))
+                os.makedirs(image_dir, exist_ok=True)
+
+
 class OrderHandler:
     def __init__(self, fm, oss):
         self.fm = fm
@@ -117,162 +157,99 @@ class OrderHandler:
 
     def complete_order_by_keyword(self, order_list, keyword: str, user: str, user_number: str):
         """
-        完成指定工单：
-        - 在去重后的工单列表中查找 title 包含 keyword 的工单（取第一个）
-        - 使用当前日期/时间生成水印，并传入 name 和 user_number
-        - 启动工单、上传图片、提交工单、发送通知
-
-        成功：返回一个包含基本信息的 dict
-        失败：抛出 OrderHandlerError 子类异常，供上层接口捕获并返回给前端
+        按关键字自动完成工单（对外接口）
         """
-
-        # 0️⃣ 去重
-        unique_order_list = remove_duplicate_titles(order_list)
-
-        # 1️⃣ 查找包含 keyword 的工单（按 title 匹配，取第一个）
-        target_order = next(
-            (o for o in unique_order_list if keyword in o.get("title", "")),
-            None,
+        return self._complete_order(
+            order_list=order_list,
+            mode="keyword",
+            user=user,
+            user_number=user_number,
+            keyword=keyword,
+            order_id=None,
         )
-        if not target_order:
-            msg = f"未找到包含关键字【{keyword}】的工单"
-            logger.warning(msg)
-            raise OrderNotFoundError(msg)
-
-        title = target_order["title"]
-        order_id = target_order["id"]
-        status = target_order["status"]
-
-        # 2️⃣ 获取规则
-        rule = ORDER_RULES.get(title)
-        if not rule:
-            msg = f"未找到工单【{title}】对应的规则，无法处理"
-            logger.warning(msg)
-            raise RuleNotFoundError(msg)
-
-        logger.info(
-            f"按关键字完成工单: {title}[{order_id}], "
-            f"keyword={keyword}, user={user}, user_number={user_number}"
-        )
-
-        # 4️⃣ 启动工单（与 _process_order 保持一致）
-        if status == "3":
-            self.fm.start_order(order_id)
-
-        # 5️⃣ 获取图片数量
-        image_count = rule["image_count"]
-
-        # 固定日期 / 时间：今天 + 当前时间
-        now = datetime.datetime.now()
-        base_date = now.strftime("%Y-%m-%d")
-        base_time = now.strftime("%H:%M")
-
-        # 6️⃣ 生成水印图片（唯一文件名），但时间固定为当前
-        image_paths = []
-        for i in range(image_count):
-            tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
-            tmp_path = os.path.join(self.tmp_dir, tmp_filename)
-
-            template_path = rule["template"]
-            if title == "单元楼栋月巡检":
-                # 如果订单包含位置信息，则使用位置子目录
-                matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
-                if matches:
-                    template_path = f"{rule['template']}/{matches[0]}"
-
-            add_watermark_to_image(
-                original_image_path=get_random_template_file(template_path, str(i + 1)),
-                base_date=base_date,
-                base_time=base_time,
-                name=user,
-                user_number=user_number,
-                output_path=tmp_path,
-            )
-            image_paths.append(tmp_path)
-
-        # 7️⃣ 上传图片（任意一张失败直接抛错）
-        uploaded_urls = []
-        for path in image_paths:
-            try:
-                url = self.oss.upload(path)
-                uploaded_urls.append(url)
-                logger.info(f"[按关键字] 上传成功: {url}")
-            except Exception as e:
-                msg = f"[按关键字] 上传失败: {e}"
-                logger.error(msg, exc_info=True)
-                # 清理已生成的临时文件再抛异常
-                for p in image_paths:
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
-                raise ImageUploadError(msg) from e
-
-        # 8️⃣ 清理临时文件
-        for path in image_paths:
-            try:
-                os.remove(path)
-                logger.debug(f"[按关键字] 已删除临时文件: {path}")
-            except Exception as e:
-                # 清理失败不视为致命错误，打个 warning 即可
-                logger.warning(f"[按关键字] 删除临时文件失败: {path}, {e}")
-
-        # 9️⃣ 提交工单
-        if len(uploaded_urls) < image_count:
-            msg = (
-                f"[按关键字] 部分图片上传失败，未提交工单: "
-                f"{len(uploaded_urls)}/{image_count}"
-            )
-            logger.warning(msg)
-            raise PartialUploadError(msg)
-
-        payload = rule["func"](order_id, *uploaded_urls)
-        self.fm.submit_order(payload)
-        logger.info(f"[按关键字] 提交工单: {json.dumps(payload, ensure_ascii=False)}")
-        self.notify.send(f"工单【{title}】已完成（按关键字触发）")
-
-        logger.info(f"工单【{title}】按关键字处理完成 ✅")
-
-        # 返回一些信息，方便接口直接用
-        return {
-            "order_id": order_id,
-            "title": title,
-            "keyword": keyword,
-            "user": user,
-            "user_number": user_number,
-            "upload_count": len(uploaded_urls),
-        }
 
     def complete_order_by_id(self, order_list, order_id, user: str, user_number: str):
         """
-        根据工单 ID 自动完成工单：
-        - 在去重后的工单列表中查找 id 匹配的工单（取第一个）
-        - 根据工单 title 匹配规则
-        - 使用当前日期/时间生成水印，并传入 name 和 user_number
-        - 启动工单、上传图片、提交工单、发送通知
+        按工单 ID 自动完成工单（对外接口）
+        """
+        return self._complete_order(
+            order_list=order_list,
+            mode="id",
+            user=user,
+            user_number=user_number,
+            keyword=None,
+            order_id=order_id,
+        )
 
-        成功：返回一个包含基本信息的 dict
-        失败：抛出 OrderHandlerError 子类异常，供上层接口捕获并返回给前端
+    def _complete_order(
+            self,
+            order_list,
+            mode: Literal["keyword", "id"],
+            user: str,
+            user_number: str,
+            keyword: Optional[str],
+            order_id,
+    ):
+        """
+        统一的工单处理流水线：
+        - 根据 mode 决定如何在列表中查找目标工单
+        - 根据工单 title 匹配规则
+        - 生成带水印图片
+        - 启动工单、上传图片、提交工单、发送通知
         """
 
-        # 0️⃣ 去重（按 title 去重的规则保持一致）
+        # 0️⃣ 创建用户目录
+        init_template_pic_dirs(user_number)
+
+        # 1️⃣ 去重（按 title 去重的规则保持一致）
         unique_order_list = remove_duplicate_titles(order_list)
 
-        # 1️⃣ 查找 id 匹配的工单（注意把两边都转成 str，避免 int/str 混用匹配失败）
-        target_order = next(
-            (o for o in unique_order_list if str(o.get("id")) == str(order_id)),
-            None,
-        )
-        if not target_order:
-            msg = f"未在工单列表中找到 ID 为【{order_id}】的工单"
-            logger.warning(msg)
-            raise OrderNotFoundError(msg)
+        # 2️⃣ 根据 mode 查找目标工单
+        if mode == "keyword":
+            if not keyword:
+                raise ValueError("mode=keyword 时必须提供 keyword 参数")
 
+            target_order = next(
+                (o for o in unique_order_list if keyword in o.get("title", "")),
+                None,
+            )
+            if not target_order:
+                msg = f"未找到包含关键字【{keyword}】的工单"
+                logger.warning(msg)
+                raise OrderNotFoundError(msg)
+
+            search_desc = f"keyword={keyword}"
+            mode_desc = "按关键字"
+            log_prefix = "[按关键字]"
+            notify_suffix = "（按关键字触发）"
+
+        elif mode == "id":
+            if order_id is None:
+                raise ValueError("mode=id 时必须提供 order_id 参数")
+
+            target_order = next(
+                (o for o in unique_order_list if str(o.get("id")) == str(order_id)),
+                None,
+            )
+            if not target_order:
+                msg = f"未在工单列表中找到 ID 为【{order_id}】的工单"
+                logger.warning(msg)
+                raise OrderNotFoundError(msg)
+
+            search_desc = f"order_id={order_id}"
+            mode_desc = "按工单ID"
+            log_prefix = "[按工单ID]"
+            notify_suffix = "（按工单ID触发）"
+
+        else:
+            raise ValueError(f"不支持的 mode: {mode!r}")
+
+        # 3️⃣ 解析工单基础信息
         title = target_order["title"]
         status = target_order["status"]
-        order_id = target_order["id"]  # 用列表里的真实值覆盖一下，避免类型不一致
+        order_id = target_order["id"]  # 用列表里的真实值覆盖一下
 
-        # 2️⃣ 获取规则
+        # 4️⃣ 获取规则
         rule = ORDER_RULES.get(title)
         if not rule:
             msg = f"未找到工单【{title}】对应的规则，无法处理"
@@ -280,24 +257,22 @@ class OrderHandler:
             raise RuleNotFoundError(msg)
 
         logger.info(
-            f"按工单ID完成工单: {title}[{order_id}], "
-            f"user={user}, user_number={user_number}"
+            f"{mode_desc}完成工单: {title}[{order_id}], "
+            f"{search_desc}, user={user}, user_number={user_number}"
         )
 
-        # 4️⃣ 启动工单（与 _process_order / complete_order_by_keyword 保持一致）
+        # 5️⃣ 启动工单
         if status == "3":
             self.fm.start_order(order_id)
 
-        # 5️⃣ 获取图片数量
+        # 6️⃣ 获取图片数量 + 当前时间
         image_count = rule["image_count"]
-
-        # 固定日期 / 时间：今天 + 当前时间
         now = datetime.datetime.now()
         base_date = now.strftime("%Y-%m-%d")
         base_time = now.strftime("%H:%M")
 
-        # 6️⃣ 生成水印图片（唯一文件名），但时间固定为当前
-        image_paths = []
+        # 7️⃣ 生成水印图片（唯一文件名）
+        image_paths: List[str] = []
         for i in range(image_count):
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
             tmp_path = os.path.join(self.tmp_dir, tmp_filename)
@@ -309,8 +284,14 @@ class OrderHandler:
                 if matches:
                     template_path = f"{user_number}/{rule['template']}/{matches[0]}"
 
+            original_image_path = get_random_template_file(template_path, str(i + 1))
+            if not original_image_path:
+                msg = f"未找到模板图片: {template_path}/{i + 1}"
+                logger.error(msg)
+                raise ImageUploadError(msg)
+
             add_watermark_to_image(
-                original_image_path=get_random_template_file(template_path, str(i + 1)),
+                original_image_path=original_image_path,
                 base_date=base_date,
                 base_time=base_time,
                 name=user,
@@ -319,54 +300,57 @@ class OrderHandler:
             )
             image_paths.append(tmp_path)
 
-        # 7️⃣ 上传图片（任意一张失败直接抛错）
-        uploaded_urls = []
-        for path in image_paths:
-            try:
+        # 8️⃣ 上传图片（任意一张失败直接抛错）
+        uploaded_urls: List[str] = []
+        try:
+            for path in image_paths:
                 url = self.oss.upload(path)
                 uploaded_urls.append(url)
-                logger.info(f"[按工单ID] 上传成功: {url}")
-            except Exception as e:
-                msg = f"[按工单ID] 上传失败: {e}"
-                logger.error(msg, exc_info=True)
-                # 清理已生成的临时文件再抛异常
-                for p in image_paths:
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
-                raise ImageUploadError(msg) from e
+                logger.info(f"{log_prefix} 上传成功: {url}")
+        except Exception as e:
+            msg = f"{log_prefix} 上传失败: {e}"
+            logger.error(msg, exc_info=True)
+            # 清理已生成的临时文件再抛异常
+            for p in image_paths:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+            raise ImageUploadError(msg) from e
+        finally:
+            # 9️⃣ 清理临时文件（失败不视为致命错误）
+            for path in image_paths:
+                try:
+                    os.remove(path)
+                    logger.debug(f"{log_prefix} 已删除临时文件: {path}")
+                except Exception as e:
+                    logger.warning(f"{log_prefix} 删除临时文件失败: {path}, {e}")
 
-        # 8️⃣ 清理临时文件
-        for path in image_paths:
-            try:
-                os.remove(path)
-                logger.debug(f"[按工单ID] 已删除临时文件: {path}")
-            except Exception as e:
-                # 清理失败不视为致命错误，打个 warning 即可
-                logger.warning(f"[按工单ID] 删除临时文件失败: {path}, {e}")
-
-        # 9️⃣ 提交工单
+        # 🔟 校验上传数量
         if len(uploaded_urls) < image_count:
             msg = (
-                f"[按工单ID] 部分图片上传失败，未提交工单: "
+                f"{log_prefix} 部分图片上传失败，未提交工单: "
                 f"{len(uploaded_urls)}/{image_count}"
             )
             logger.warning(msg)
             raise PartialUploadError(msg)
 
+        # 1️⃣1️⃣ 提交工单
         payload = rule["func"](order_id, *uploaded_urls)
         self.fm.submit_order(payload)
-        logger.info(f"[按工单ID] 提交工单: {json.dumps(payload, ensure_ascii=False)}")
-        self.notify.send(f"工单【{title}】已完成（按工单ID触发）")
+        logger.info(f"{log_prefix} 提交工单: {json.dumps(payload, ensure_ascii=False)}")
+        self.notify.send(f"工单【{title}】已完成{notify_suffix}")
 
-        logger.info(f"工单【{title}】按工单ID处理完成 ✅")
+        logger.info(f"工单【{title}】{mode_desc}处理完成 ✅")
 
-        # 返回一些信息，方便上层接口直接用
-        return {
+        # 1️⃣2️⃣ 返回信息（按原来两个方法的差异来拼）
+        result = {
             "order_id": order_id,
             "title": title,
             "user": user,
             "user_number": user_number,
             "upload_count": len(uploaded_urls),
         }
+        if mode == "keyword":
+            result["keyword"] = keyword
+        return result

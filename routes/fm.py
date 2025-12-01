@@ -10,10 +10,8 @@ from order_handler import OrderHandler
 from oss_client import OSSClient
 from utils.crypter import generate_random_coordinates
 from utils.custom_raise import *
-from utils.notification import Notify
 
 bp = Blueprint("fm", __name__)
-notify = Notify()
 
 
 # 完成工单
