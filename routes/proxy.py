@@ -11,7 +11,7 @@ from utils.notification import Notify
 bp = Blueprint("proxy", __name__)
 
 
-def upsert_user_info(token, user_number, name, phone, device_model, device_id, expires):
+def upsert_user_info(token, user_number, name, phone, device_model, device_id, token_expires):
     """
     按 user_number 执行 upsert：
     - 若存在：更新 token/name/phone/device_model
@@ -25,7 +25,7 @@ def upsert_user_info(token, user_number, name, phone, device_model, device_id, e
         user.phone = phone
         user.device_model = device_model
         user.device_id = device_id
-        user.expires = expires
+        user.token_expires = token_expires
         user.save()  # 只更新变动字段（peewee 自动对比）
         log_line(f"[INFO] [UserInfo] 更新用户: {user_number}")
     except DoesNotExist:
@@ -37,7 +37,7 @@ def upsert_user_info(token, user_number, name, phone, device_model, device_id, e
             phone=phone,
             device_model=device_model,
             device_id=device_id,
-            expires=expires,
+            token_expires=token_expires,
         )
         log_line(f"[INFO] [UserInfo] 创建新用户: {user_number}")
     except Exception as e:
@@ -80,10 +80,11 @@ def proxy(subpath):
                 user_number = str(data.get('staffId'))
                 result = data.get('result') or {}
                 access_token = result.get('access_token')
-                expires = result.get('expires')
+                token_expires = result.get('expires')
             except Exception:
                 access_token = None
                 user_number = None
+                token_expires = 0
 
             if access_token and user_number:
                 try:
@@ -103,7 +104,7 @@ def proxy(subpath):
                         phone=phone,
                         device_model=device_model,
                         device_id=device_id,
-                        expires=expires,
+                        token_expires=token_expires,
                     )
                     log_line(
                         f"[INFO] [UserInfo] 用户信息 更新成功, {user_number} {name} {phone} {device_model} {device_id}")
