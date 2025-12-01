@@ -220,6 +220,7 @@ class UserInfo(BaseModel):
     phone = CharField(max_length=1, null=True)
     device_model = CharField(max_length=50, null=True)
     device_id = CharField(max_length=50, null=True)
+    expires = IntegerField(null=True)
 
     class Meta:
         table_name = "user_info"
