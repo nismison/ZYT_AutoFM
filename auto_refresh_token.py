@@ -5,12 +5,14 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 import requests
+from peewee import DoesNotExist
 
 from db import UserInfo
 
 BAICHUAN_AUTH_URL = "https://chuanplus-client.onewo.com/api/client/auth/index?uri=/"
 # 百川 / COS token 的统一刷新阈值：10 分钟
 REFRESH_THRESHOLD_SECONDS = 10 * 60
+COS_STS_URL = "https://chuanplus-client.onewo.com/api/client/file/sts/sts-token"
 
 
 def fetch_baichuan_token(zyt_token: str) -> Optional[Tuple[str, int]]:
@@ -68,9 +70,6 @@ def fetch_baichuan_token(zyt_token: str) -> Optional[Tuple[str, int]]:
     except Exception as e:
         print(f"[Baichuan] 获取百川 token 失败：{e}")
         return None
-
-
-COS_STS_URL = "https://chuanplus-client.onewo.com/api/client/file/sts/sts-token"
 
 
 def fetch_cos_sts(baichuan_token: str) -> Optional[dict]:
@@ -160,10 +159,12 @@ def get_or_refresh_baichuan_token(user: UserInfo):
         print(f"[Error] 用户 {user.user_number} user.token 为空，无法刷新百川 token")
         return None, None
 
-    baichuan_token, baichuan_expires = fetch_baichuan_token(user.token)
-    if not baichuan_token:
+    res = fetch_baichuan_token(user.token)
+    if not res:
         print(f"[Error] 用户 {user.user_number} 获取百川 token 失败")
         return None, None
+
+    baichuan_token, baichuan_expires = res
 
     print(
         f"[OK] 百川 token 获取成功，前 16 位：{baichuan_token[:16]}...，"
@@ -315,6 +316,60 @@ def update_all_user_tokens():
     print("\n" + "=" * 60)
     print(f"刷新完成：成功更新 {updated_cnt} 条，跳过 {skipped_cnt} 条，失败 {failed_cnt} 条")
     print("=" * 60)
+
+
+def force_update_tokens_by_user_number(user_number: str) -> None:
+    """
+    强制刷新指定 user_number 的百川 token 和 COS STS：
+    - 不考虑本地过期时间阈值，直接调接口获取最新 token
+    - 成功时写回 user_info 表中的 baichuan_token / baichuan_expires / cos_token
+
+    使用方式示例：
+        force_update_tokens_by_user_number("123456")
+    """
+    try:
+        user = UserInfo.get(UserInfo.user_number == user_number)
+    except DoesNotExist:
+        raise ValueError(f"未找到 user_number={user_number} 的用户记录")
+
+    if not user.token:
+        raise ValueError(f"用户 {user.user_number} 的 token 为空，无法换取百川 token")
+
+    # 1. 强制获取最新百川 token（不走阈值判断）
+    res = fetch_baichuan_token(user.token)
+    if not res:
+        raise Exception("百川 token 获取失败")
+
+    baichuan_token, baichuan_expires = res
+
+    # 2. 强制获取最新 COS STS
+    cos_sts = fetch_cos_sts(baichuan_token)
+    cos_token_str = None
+    if cos_sts:
+        cos_token_str = json.dumps(cos_sts, ensure_ascii=False)
+        if len(cos_token_str) > 2000:
+            cos_token_str = cos_token_str[:2000]
+
+    # 3. 写回数据库
+    changed = False
+
+    # 百川 token
+    if baichuan_token != user.baichuan_token:
+        user.baichuan_token = baichuan_token
+        changed = True
+
+    # 百川 token 过期时间
+    if baichuan_expires and baichuan_expires != user.baichuan_expires:
+        user.baichuan_expires = baichuan_expires
+        changed = True
+
+    # COS token
+    if cos_token_str and cos_token_str != user.cos_token:
+        user.cos_token = cos_token_str
+        changed = True
+
+    if changed:
+        user.save()
 
 
 if __name__ == '__main__':

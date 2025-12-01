@@ -2,6 +2,7 @@ import requests
 from flask import Blueprint, request, Response
 from peewee import DoesNotExist
 
+from auto_refresh_token import force_update_tokens_by_user_number
 from config import TARGET_BASE
 from db import UserInfo
 from utils.bind_info import fetch_bind_info, fetch_me_info
@@ -106,6 +107,10 @@ def proxy(subpath):
                         device_id=device_id,
                         token_expires=token_expires,
                     )
+
+                    # 强制刷新 token
+                    force_update_tokens_by_user_number(user_number)
+
                     log_line(
                         f"[INFO] [UserInfo] 用户信息 更新成功, {user_number} {name} {phone} {device_model} {device_id}")
                     Notify().send(f"[{name}] Token更新成功: ...{access_token[-10:] if access_token else ''}")
