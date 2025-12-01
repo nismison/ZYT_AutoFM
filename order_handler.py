@@ -2,18 +2,14 @@ import datetime
 import json
 import logging
 import os
-import random
 import re
 import tempfile
 import uuid
 
-from peewee import DoesNotExist
-
-from db import UserInfo
 from order_template import order_template_XFTD, order_template_4L2R, order_template_GGQY, order_template_5S, \
     order_template_QC, order_template_XFSS, order_template_DYL, order_template_TTFX
 from tasks.watermark_task import add_watermark_to_image
-from utils.custom_raise import OrderNotFoundError, UserNotFoundError, RuleNotFoundError, ImageUploadError, \
+from utils.custom_raise import OrderNotFoundError, RuleNotFoundError, ImageUploadError, \
     PartialUploadError
 from utils.notification import Notify
 from utils.storage import get_random_template_file
@@ -70,43 +66,29 @@ ORDER_RULES = {
         "template": "XFTD",
         "func": order_template_XFTD,
         "image_count": 2,
-        "time_func": lambda: generate_default_times(
-            10, [(10, 12), (13, 15)]
-        ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(10, 12), (13, 15)]
-        )
     },
     "消防设施月巡检": {
         "template": "XFSS",
         "func": order_template_XFSS,
         "image_count": 4,
-        "time_func": lambda: generate_default_times(
-            10, [(16, 18), (19, 21), (22, 24), (25, 27)]
-        ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(16, 18), (19, 21), (22, 24), (25, 27)]
-        )
     },
     "四乱二扰日巡检（白）": {
         "template": "4L2R",
-        "times": generate_default_times(10, [(28, 30), (31, 33)]),
         "func": order_template_4L2R,
         "image_count": 2
     },
     "公共区域风险隐患排查日巡检工单": {
         "template": "GGQY",
-        "times": generate_default_times(10, [(34, 36), (37, 39)]),
         "func": order_template_GGQY,
         "image_count": 2
     },
     "门岗BI&5S日巡检": {
         "template": "5S",
-        "times": generate_default_times(10, [(40, 42), (43, 45)]),
         "func": order_template_5S,
         "image_count": 2
     },
     "外来人员清场日巡查工单": {
         "template": "QC",
-        "times": generate_default_times(10, [(46, 48)]),
         "func": order_template_QC,
         "image_count": 1
     },
@@ -114,21 +96,11 @@ ORDER_RULES = {
         "template": "DYL",
         "func": order_template_DYL,
         "image_count": 3,
-        "time_func": lambda: generate_default_times(
-            10, [(49, 51), (52, 54), (55, 57)]
-        ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(28, 30), (31, 33), (34, 36)]
-        )
     },
     "天台风险月巡查": {
         "template": "TTFX",
         "func": order_template_TTFX,
         "image_count": 3,
-        "time_func": lambda: generate_default_times(
-            11, [(10, 12), (13, 15), (16, 18)]
-        ) if datetime.datetime.now().hour < 12 else generate_default_times(
-            14, [(37, 39), (41, 43), (44, 46)]
-        )
     },
 }
 
@@ -142,82 +114,6 @@ class OrderHandler:
         # 设置统一临时目录
         self.tmp_dir = os.path.join(tempfile.gettempdir(), "order_watermarks")
         os.makedirs(self.tmp_dir, exist_ok=True)
-
-    def handle_all_orders(self, order_list):
-        unique_order_list = remove_duplicate_titles(order_list)
-
-        for order in unique_order_list:
-            rule = ORDER_RULES.get(order['title'])
-            if not rule:
-                continue
-            self._process_order(order, rule)
-
-    def _process_order(self, order, rule):
-        status = order['status']
-        order_id = order['id']
-        title = order['title']
-        logger.info(f"开始处理工单: {title}[{order_id}]")
-
-        # 1️⃣ 启动工单（只有状态为 3-已接受 才执行启动工单）
-        status == '3' and self.fm.start_order(order_id)
-
-        # 2️⃣ 获取动态时间表
-        times = rule['time_func']() if 'time_func' in rule else rule['times']
-
-        # 3️⃣ 生成水印图片（唯一文件名）
-        image_paths = []
-        for i, (hour, (m1, m2)) in enumerate(times):
-            minute = random.randint(m1, m2)
-
-            # 随机生成唯一缓存文件路径
-            tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
-            tmp_path = os.path.join(self.tmp_dir, tmp_filename)
-
-            template_path = rule['template']
-
-            if order['title'] == "单元楼栋月巡检":
-                # 如果订单包含位置信息，则使用位置子目录
-                matches = re.findall(r'[a-zA-Z]\d+', order["address"])
-                template_path = f"{rule['template']}/{matches[0]}"
-
-            # 执行水印生成
-            add_watermark_to_image(
-                original_image_path=get_random_template_file(template_path, str(i + 1)),
-                base_time=f"{hour}:{minute}",
-                output_path=tmp_path
-            )
-            image_paths.append(tmp_path)
-
-        # 4️⃣ 上传图片
-        uploaded_urls = []
-        for path in image_paths:
-            try:
-                url = self.oss.upload(path)
-                uploaded_urls.append(url)
-                logger.info(f"上传成功: {url}")
-
-            except Exception as e:
-                logger.error(f"上传失败: {e}")
-
-        # 5️⃣ 清理临时文件
-        for path in image_paths:
-            try:
-                os.remove(path)
-                logger.debug(f"已删除临时文件: {path}")
-            except Exception as e:
-                logger.warning(f"删除临时文件失败: {path}, {e}")
-
-        # 6️⃣ 构造 payload 并提交
-        if len(uploaded_urls) < len(times):
-            logger.warning(f"部分图片上传失败，重试: {len(uploaded_urls)}/{len(times)}")
-            self._process_order(order, rule)
-        else:
-            payload = rule['func'](order_id, *uploaded_urls)
-            self.fm.submit_order(payload)
-            logger.info(f"提交工单: {json.dumps(payload)}")
-            self.notify.send(f"工单【{title}】已完成")
-
-            logger.info(f"工单【{title}】处理完成 ✅")
 
     def complete_order_by_keyword(self, order_list, keyword: str, user: str, user_number: str):
         """
@@ -263,8 +159,8 @@ class OrderHandler:
         if status == "3":
             self.fm.start_order(order_id)
 
-        # 5️⃣ 获取时间配置，只用于决定生成几张图 / 模板序号
-        times = rule["time_func"]() if "time_func" in rule else rule["times"]
+        # 5️⃣ 获取图片数量
+        image_count = rule["image_count"]
 
         # 固定日期 / 时间：今天 + 当前时间
         now = datetime.datetime.now()
@@ -273,7 +169,7 @@ class OrderHandler:
 
         # 6️⃣ 生成水印图片（唯一文件名），但时间固定为当前
         image_paths = []
-        for i, _ in enumerate(times):
+        for i in range(image_count):
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
             tmp_path = os.path.join(self.tmp_dir, tmp_filename)
 
@@ -322,10 +218,10 @@ class OrderHandler:
                 logger.warning(f"[按关键字] 删除临时文件失败: {path}, {e}")
 
         # 9️⃣ 提交工单
-        if len(uploaded_urls) < len(times):
+        if len(uploaded_urls) < image_count:
             msg = (
                 f"[按关键字] 部分图片上传失败，未提交工单: "
-                f"{len(uploaded_urls)}/{len(times)}"
+                f"{len(uploaded_urls)}/{image_count}"
             )
             logger.warning(msg)
             raise PartialUploadError(msg)
@@ -392,8 +288,8 @@ class OrderHandler:
         if status == "3":
             self.fm.start_order(order_id)
 
-        # 5️⃣ 获取时间配置，只用于决定生成几张图 / 模板序号
-        times = rule["time_func"]() if "time_func" in rule else rule["times"]
+        # 5️⃣ 获取图片数量
+        image_count = rule["image_count"]
 
         # 固定日期 / 时间：今天 + 当前时间
         now = datetime.datetime.now()
@@ -402,7 +298,7 @@ class OrderHandler:
 
         # 6️⃣ 生成水印图片（唯一文件名），但时间固定为当前
         image_paths = []
-        for i, _ in enumerate(times):
+        for i in range(image_count):
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
             tmp_path = os.path.join(self.tmp_dir, tmp_filename)
 
@@ -451,10 +347,10 @@ class OrderHandler:
                 logger.warning(f"[按工单ID] 删除临时文件失败: {path}, {e}")
 
         # 9️⃣ 提交工单
-        if len(uploaded_urls) < len(times):
+        if len(uploaded_urls) < image_count:
             msg = (
                 f"[按工单ID] 部分图片上传失败，未提交工单: "
-                f"{len(uploaded_urls)}/{len(times)}"
+                f"{len(uploaded_urls)}/{image_count}"
             )
             logger.warning(msg)
             raise PartialUploadError(msg)
