@@ -293,7 +293,7 @@ class OrderHandler:
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
             tmp_path = os.path.join(self.tmp_dir, tmp_filename)
 
-            template_path = f"{user_number}{rule['template']}/"
+            template_path = f"{user_number}/{rule['template']}/"
             if title == "单元楼栋月巡检":
                 # 如果订单包含位置信息，则使用位置子目录
                 matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
