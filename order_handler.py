@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import os
+import random
 import re
 import tempfile
 import uuid
@@ -265,13 +266,28 @@ class OrderHandler:
         if status == "3":
             self.fm.start_order(order_id)
 
-        # 6️⃣ 获取图片数量 + 当前时间
+        # 6️⃣ 获取图片数量 + 预生成每一张的水印时间
         image_count = rule["image_count"]
-        now = datetime.datetime.now()
-        base_date = now.strftime("%Y-%m-%d")
-        base_time = now.strftime("%H:%M")
 
-        # 7️⃣ 生成水印图片（唯一文件名）
+        # watermark_times[i] 对应第 i 张图的时间
+        watermark_times: List[datetime.datetime] = [None] * image_count  # type: ignore
+        current_dt = datetime.datetime.now()
+
+        # 从最后一张往前推：
+        # - 最后一张 = now
+        # - 每往前一张，在上一张基础上随机减 1~2 分钟
+        for idx in reversed(range(image_count)):
+            watermark_times[idx] = current_dt
+            if idx > 0:
+                offset_minutes = random.randint(1, 2)
+                current_dt -= datetime.timedelta(minutes=offset_minutes)
+
+        logger.debug(
+            f"{log_prefix} 生成水印时间序列: "
+            + ", ".join(dt.strftime("%Y-%m-%d %H:%M") for dt in watermark_times)
+        )
+
+        # 7️⃣ 生成水印图片（唯一文件名），每张使用各自的 base_date/base_time
         image_paths: List[str] = []
         for i in range(image_count):
             tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
@@ -289,6 +305,11 @@ class OrderHandler:
                 msg = f"未找到模板图片: {template_path}/{i + 1}"
                 logger.error(msg)
                 raise ImageUploadError(msg)
+
+            # 使用为当前索引预先计算好的水印时间
+            wm_dt = watermark_times[i]
+            base_date = wm_dt.strftime("%Y-%m-%d")
+            base_time = wm_dt.strftime("%H:%M")
 
             add_watermark_to_image(
                 original_image_path=original_image_path,
