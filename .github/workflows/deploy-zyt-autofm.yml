@@ -1,0 +1,137 @@
+name: Deploy ZYT_AutoFM
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 标记工作流开始时间（秒）
+      - name: Mark workflow start time
+        run: echo "WORKFLOW_START=$(date +%s)" >> $GITHUB_ENV
+
+      # 准备 SSH 私钥 & known_hosts
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # 写入私钥
+          echo "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # 添加目标主机到 known_hosts，避免交互确认
+          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+
+      # 通过 SSH 执行 start_server.sh，并把输出保存到 deploy.log
+      - name: Deploy to server via SSH
+        id: deploy
+        run: |
+          set -o pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'bash /www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/start_server.sh' | tee deploy.log
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
+      # 部署成功通知
+      - name: Notify success
+        if: success()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$(( END_TIME - WORKFLOW_START ))
+          MIN=$(( DURATION / 60 ))
+          SEC=$(( DURATION % 60 ))
+          DURATION_LABEL="${MIN}分${SEC}秒"
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          # 从 deploy.log 中解析 PID，如果没解析到就标记为 "未知"
+          UPLOAD_PID=$(grep -o 'UPLOAD_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+          MERGE_PID=$(grep -o 'MERGE_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+          GUNICORN_PID=$(grep -o 'GUNICORN_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+
+          CONTENT="分支: ${GITHUB_REF_NAME}\n提交: ${GITHUB_SHA}\n构建ID: ${GITHUB_RUN_ID}\n部署耗时: ${DURATION_LABEL} (${DURATION} 秒)\n详情: ${RUN_URL}\n\n服务 PID:\nupload_worker.py: ${UPLOAD_PID}\nmerge_worker.py: ${MERGE_PID}\nGunicorn: ${GUNICORN_PID}"
+
+          curl --location "$NOTIFY_API_URL" \
+            --header 'Content-Type: application/json' \
+            --data @- <<EOF
+          {
+            "appToken": "$NOTIFY_TOKEN",
+            "summary": "ZYT_AutoFM 部署成功",
+            "content": "${CONTENT}",
+            "contentType": 1,
+            "uids": [
+              "UID_0UhoJ977fvwsJhzXokMmhzgIqFRZ"
+            ]
+          }
+          EOF
+        env:
+          NOTIFY_API_URL: ${{ secrets.NOTIFY_API_URL }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      # 部署失败通知（git/db/脚本任一步失败都会走这里）
+      - name: Notify failure
+        if: failure()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$(( END_TIME - WORKFLOW_START ))
+          MIN=$(( DURATION / 60 ))
+          SEC=$(( DURATION % 60 ))
+          DURATION_LABEL="${MIN}分${SEC}秒"
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          # 即使失败，也尝试解析 PID，方便排查部分启动成功的情况
+          if [ -f deploy.log ]; then
+            UPLOAD_PID=$(grep -o 'UPLOAD_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+            MERGE_PID=$(grep -o 'MERGE_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+            GUNICORN_PID=$(grep -o 'GUNICORN_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
+          else
+            UPLOAD_PID="日志缺失"
+            MERGE_PID="日志缺失"
+            GUNICORN_PID="日志缺失"
+          fi
+
+          CONTENT="分支: ${GITHUB_REF_NAME}\n提交: ${GITHUB_SHA}\n构建ID: ${GITHUB_RUN_ID}\n部署耗时: ${DURATION_LABEL} (${DURATION} 秒)\n详情: ${RUN_URL}\n\n服务 PID（可能不完整，仅供排查）:\nupload_worker.py: ${UPLOAD_PID}\nmerge_worker.py: ${MERGE_PID}\nGunicorn: ${GUNICORN_PID}"
+
+          curl --location "$NOTIFY_API_URL" \
+            --header 'Content-Type: application/json' \
+            --data @- <<EOF
+          {
+            "appToken": "$NOTIFY_TOKEN",
+            "summary": "ZYT_AutoFM 部署失败",
+            "content": "${CONTENT}",
+            "contentType": 1,
+            "uids": [
+              "UID_0UhoJ977fvwsJhzXokMmhzgIqFRZ"
+            ]
+          }
+          EOF
+        env:
+          NOTIFY_API_URL: ${{ secrets.NOTIFY_API_URL }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
