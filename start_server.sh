@@ -123,16 +123,52 @@ else
 fi
 
 # ============================
-# 4. 启动 Gunicorn（后台 + 健康检查）
+# 4. 启动 Gunicorn（后台 + 清理旧进程 + 健康检查）
 # ============================
 
-# 先确保配置文件真实存在；printf '%q' 会把隐藏字符转义出来，方便排查
+GUNICORN_PIDFILE="$REPO_PATH/gunicorn.pid"
+
+# 4.1 确认配置文件存在
 if [ ! -f "$GUNICORN_CONF" ]; then
   log "[ERROR] Gunicorn 配置文件不存在，GUNICORN_CONF 实际值为: $(printf '%q\n' "$GUNICORN_CONF")"
   echo "GUNICORN_PID=0"
   exit 1
 fi
 
+# 4.2 如果存在旧的 Gunicorn（通过 pidfile），先优雅停止
+if [ -f "$GUNICORN_PIDFILE" ]; then
+  OLD_PID="$(cat "$GUNICORN_PIDFILE" 2>/dev/null || echo "")"
+
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    log "[INFO] 检测到已运行的 Gunicorn（PID=$OLD_PID），准备重启..."
+
+    # 优雅停止
+    kill "$OLD_PID" 2>/dev/null || true
+
+    # 最多等 10 秒让它退出
+    for i in {1..10}; do
+      if kill -0 "$OLD_PID" 2>/dev/null; then
+        sleep 1
+      else
+        break
+      fi
+    done
+
+    # 如果还活着，强制 kill -9
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+      log "[WARN] Gunicorn 仍在运行，执行 kill -9 $OLD_PID"
+      kill -9 "$OLD_PID" 2>/dev/null || true
+      sleep 1
+    fi
+  else
+    log "[INFO] 发现旧的 pidfile 但进程不存在，清理 pidfile。"
+  fi
+
+  # 清理掉旧 pidfile（避免 gunicorn 拿到坏 pid）
+  rm -f "$GUNICORN_PIDFILE" 2>/dev/null || true
+fi
+
+# 4.3 启动新的 Gunicorn（后台）
 log "[INFO] 以后台方式启动 Gunicorn 服务..."
 log "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
 
@@ -142,6 +178,7 @@ nohup "$GUNICORN_BIN" -c "$GUNICORN_CONF" "$APP_MODULE" >> "$GUNICORN_LOG" 2>&1 
 GUNICORN_PID=$!
 sleep 3
 
+# 4.4 健康检查：确认新 Gunicorn 还在跑
 if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
   log "[ERROR] Gunicorn 启动失败，PID: $GUNICORN_PID，详情见日志: $GUNICORN_LOG"
   echo "GUNICORN_PID=0"
