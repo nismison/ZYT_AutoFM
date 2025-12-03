@@ -17,6 +17,7 @@ def index():
 @bp.route("/stream")
 def stream():
     """先输出文件末尾500行，再实时推送新增内容"""
+
     def generate():
         # 等待文件出现
         while not os.path.exists(LOG_PATH):
