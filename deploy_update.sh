@@ -11,7 +11,7 @@ log() {
 }
 
 REPO_PATH="/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM"
-START_SCRIPT="$REPO_PATH/start_server.sh"
+START_SCRIPT="bash $REPO_PATH/start_server.sh"
 
 log "[INFO] 当前执行用户: $(whoami)"
 
