@@ -2,9 +2,9 @@ name: Deploy ZYT_AutoFM
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
 
 jobs:
   deploy:
@@ -41,7 +41,11 @@ jobs:
         id: deploy
         run: |
           set -o pipefail
-          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+
+          # 避免使用 ssh-agent 中多余的 key，防止 "Too many authentication failures"
+          unset SSH_AUTH_SOCK
+
+          ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             'bash /www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/start_server.sh' | tee deploy.log
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -89,7 +93,7 @@ jobs:
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
 
-      # 部署失败通知（git/db/脚本任一步失败都会走这里）
+      # 部署失败通知
       - name: Notify failure
         if: failure()
         run: |
@@ -101,7 +105,6 @@ jobs:
 
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-          # 即使失败，也尝试解析 PID，方便排查部分启动成功的情况
           if [ -f deploy.log ]; then
             UPLOAD_PID=$(grep -o 'UPLOAD_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")
             MERGE_PID=$(grep -o 'MERGE_WORKER_PID=[0-9]\+' deploy.log | head -n1 | cut -d= -f2 || echo "未知")

@@ -130,7 +130,7 @@ if [ -f "$MERGE_WORKER_SCRIPT" ]; then
     sleep 2
 
     MERGE_STILL_PIDS=$(pgrep -f "$MERGE_WORKER_SCRIPT" || true)
-    if [ -n "$MERGE_STING_PIDS" ]; then
+    if [ -n "$MERGE_STILL_PIDS" ]; then
       log "[WARN] 进程未完全退出，执行 kill -9: $MERGE_STILL_PIDS"
       kill -9 $MERGE_STILL_PIDS 2>/dev/null || true
       sleep 1
@@ -144,7 +144,6 @@ if [ -f "$MERGE_WORKER_SCRIPT" ]; then
   nohup "$VENV_PY" "$MERGE_WORKER_SCRIPT" >> "$MERGE_WORKER_LOG" 2>&1 &
   MERGE_WORKER_PID=$!
   log "[INFO] merge_worker.py 已在后台启动，PID: $MERGE_WORKER_PID"
-  # 供 CI 解析
   echo "MERGE_WORKER_PID=$MERGE_WORKER_PID"
 else
   log "[WARNING] 未找到 $MERGE_WORKER_SCRIPT，跳过 Merge Worker 启动。"
