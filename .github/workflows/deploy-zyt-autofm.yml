@@ -41,12 +41,11 @@ jobs:
         run: |
           set -o pipefail
 
-          # 使用密码认证，强制优先走 password
           sshpass -p "${DEPLOY_PASSWORD}" \
             ssh -o PreferredAuthentications=password \
                 -o PubkeyAuthentication=no \
                 -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                'bash /www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/start_server.sh' \
+                'bash /www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/deploy_update.sh' \
             | tee deploy.log
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

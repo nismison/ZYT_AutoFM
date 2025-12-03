@@ -1,35 +1,22 @@
 #!/usr/bin/env bash
 
 # start_server.sh
-# 用于部署 / 启动 ZYT_AutoFM：
-# 1. 强制同步最新代码（丢弃本地修改）
-# 2. 通过 db.py 初始化数据库
-# 3. 启动后台上传 Worker（upload_worker.py）
-# 4. 启动后台 Merge Worker（merge_worker.py）
-# 5. 启动 Gunicorn（后台运行）
-#
-# 特别说明：
-# - git 拉取失败 / 超时会直接退出（exit 1）
-# - 所有服务以后台方式运行
-# - 脚本会 echo 出：
-#     UPLOAD_WORKER_PID=<pid>
-#     MERGE_WORKER_PID=<pid>
-#     GUNICORN_PID=<pid>
-#   供 CI 解析并写入通知
+# 仅负责“启动当前版本的服务”，不再 git pull：
+# 1. 执行 db.py 初始化数据库
+# 2. 重启 upload_worker.py
+# 3. 重启 merge_worker.py
+# 4. 启动 Gunicorn（后台运行）
+# 5. 回显各服务 PID，供 CI/监控使用
 
 set -euo pipefail
 
-# ============================
-# 日志工具函数（带时间戳）
-# ============================
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# ============================
-# 基本路径配置（按需修改）
-# ============================
+# ===== 基本路径配置 =====
 REPO_PATH="/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM"
+
 VENV_PY="/www/server/pyporject_evn/3820/bin/python3.8"
 GUNICORN_BIN="/www/server/pyporject_evn/3820/bin/gunicorn"
 GUNICORN_CONF="$REPO_PATH/gunicorn_conf.py"
@@ -48,22 +35,7 @@ cd "$REPO_PATH" || {
 }
 
 # ============================
-# 1. 同步最新代码
-# ============================
-log "[INFO] 开始同步最新代码..."
-
-GIT_CMD="git pull"
-
-# 使用 timeout 防止 git 卡死，失败时直接终止部署
-if ! timeout 30s bash -lc "$GIT_CMD"; then
-  log "[ERROR] Git 拉取失败或超时，终止部署。"
-  exit 1
-fi
-
-log "[INFO] 代码已成功更新到最新。"
-
-# ============================
-# 2. 初始化数据库（执行 db.py）
+# 1. 初始化数据库（执行 db.py）
 # ============================
 log "[INFO] 执行 db.py 初始化数据库..."
 
@@ -75,7 +47,7 @@ fi
 log "[INFO] 数据库初始化完成。"
 
 # ============================
-# 3. 启动后台上传 Worker（upload_worker.py）
+# 2. 启动后台上传 Worker（upload_worker.py）
 # ============================
 WORKER_SCRIPT="$REPO_PATH/upload_worker.py"
 UPLOAD_WORKER_PID=""
@@ -106,14 +78,13 @@ if [ -f "$WORKER_SCRIPT" ]; then
   nohup "$VENV_PY" "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
   UPLOAD_WORKER_PID=$!
   log "[INFO] upload_worker.py 已在后台启动，PID: $UPLOAD_WORKER_PID"
-  # 供 CI 解析
   echo "UPLOAD_WORKER_PID=$UPLOAD_WORKER_PID"
 else
   log "[WARNING] 未找到 $WORKER_SCRIPT，跳过上传 Worker 启动。"
 fi
 
 # ============================
-# 4. 启动后台 Merge Worker（merge_worker.py）
+# 3. 启动后台 Merge Worker（merge_worker.py）
 # ============================
 MERGE_WORKER_SCRIPT="$REPO_PATH/merge_worker.py"
 MERGE_WORKER_PID=""
@@ -150,16 +121,24 @@ else
 fi
 
 # ============================
-# 5. 启动 Gunicorn（后台方式）
+# 4. 启动 Gunicorn（后台方式 + 启动检测）
 # ============================
 log "[INFO] 以后台方式启动 Gunicorn 服务..."
 log "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
 
 mkdir -p "$(dirname "$GUNICORN_LOG")"
+
 nohup "$GUNICORN_BIN" -c "$GUNICORN_CONF" "$APP_MODULE" >> "$GUNICORN_LOG" 2>&1 &
 GUNICORN_PID=$!
+sleep 3
+
+if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
+  log "[ERROR] Gunicorn 启动失败，PID: $GUNICORN_PID，详情见日志: $GUNICORN_LOG"
+  echo "GUNICORN_PID=0"
+  exit 1
+fi
+
 log "[INFO] Gunicorn 已在后台启动，PID: $GUNICORN_PID"
-# 供 CI 解析
 echo "GUNICORN_PID=$GUNICORN_PID"
 
-log "[INFO] 部署流程完成。所有服务已在后台运行。"
+log "[INFO] 启动流程完成。所有服务已在后台运行。"
