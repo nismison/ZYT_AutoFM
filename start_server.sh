@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # start_server.sh
-# 仅负责“启动当前版本的服务”，不再 git pull：
+# 仅负责“启动当前版本的服务”，不做 git pull：
 # 1. 执行 db.py 初始化数据库
 # 2. 重启 upload_worker.py
 # 3. 重启 merge_worker.py
-# 4. 启动 Gunicorn（后台运行）
-# 5. 回显各服务 PID，供 CI/监控使用
+# 4. 启动 Gunicorn（后台运行 + 健康检查）
+# 5. 回显各服务 PID，供 CI/监控解析
 
 set -euo pipefail
 
@@ -14,7 +14,9 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# ===== 基本路径配置 =====
+# ============================
+# 基本路径配置
+# ============================
 REPO_PATH="/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM"
 
 VENV_PY="/www/server/pyporject_evn/3820/bin/python3.8"
@@ -35,7 +37,7 @@ cd "$REPO_PATH" || {
 }
 
 # ============================
-# 1. 初始化数据库（执行 db.py）
+# 1. 初始化数据库（db.py）
 # ============================
 log "[INFO] 执行 db.py 初始化数据库..."
 
@@ -47,7 +49,7 @@ fi
 log "[INFO] 数据库初始化完成。"
 
 # ============================
-# 2. 启动后台上传 Worker（upload_worker.py）
+# 2. 启动 upload_worker.py（后台）
 # ============================
 WORKER_SCRIPT="$REPO_PATH/upload_worker.py"
 UPLOAD_WORKER_PID=""
@@ -84,7 +86,7 @@ else
 fi
 
 # ============================
-# 3. 启动后台 Merge Worker（merge_worker.py）
+# 3. 启动 merge_worker.py（后台）
 # ============================
 MERGE_WORKER_SCRIPT="$REPO_PATH/merge_worker.py"
 MERGE_WORKER_PID=""
@@ -121,8 +123,16 @@ else
 fi
 
 # ============================
-# 4. 启动 Gunicorn（后台方式 + 启动检测）
+# 4. 启动 Gunicorn（后台 + 健康检查）
 # ============================
+
+# 先确保配置文件真实存在；printf '%q' 会把隐藏字符转义出来，方便排查
+if [ ! -f "$GUNICORN_CONF" ]; then
+  log "[ERROR] Gunicorn 配置文件不存在，GUNICORN_CONF 实际值为: $(printf '%q\n' "$GUNICORN_CONF")"
+  echo "GUNICORN_PID=0"
+  exit 1
+fi
+
 log "[INFO] 以后台方式启动 Gunicorn 服务..."
 log "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
 
