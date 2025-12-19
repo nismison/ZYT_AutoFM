@@ -298,7 +298,7 @@ class OrderHandler:
                 # 如果订单包含位置信息，则使用位置子目录
                 matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
                 if matches:
-                    template_path = f"{rule['template']}/{matches[0]}"
+                    template_path = f"{user_number}/{rule['template']}/{matches[0]}"
 
             original_image_path = get_random_template_file(template_path, str(i + 1))
             if not original_image_path:
