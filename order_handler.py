@@ -199,11 +199,8 @@ class OrderHandler:
         - 启动工单、上传图片、提交工单、发送通知
         """
 
-        # 0️⃣ 创建用户目录
+        # 1️⃣ 创建用户目录
         init_template_pic_dirs(user_number)
-
-        # 1️⃣ 去重（按 title 去重的规则保持一致）
-        unique_order_list = remove_duplicate_titles(order_list)
 
         # 2️⃣ 根据 mode 查找目标工单
         if mode == "keyword":
@@ -211,7 +208,7 @@ class OrderHandler:
                 raise ValueError("mode=keyword 时必须提供 keyword 参数")
 
             target_order = next(
-                (o for o in unique_order_list if keyword in o.get("title", "")),
+                (o for o in order_list if keyword in o.get("title", "")),
                 None,
             )
             if not target_order:
@@ -229,7 +226,7 @@ class OrderHandler:
                 raise ValueError("mode=id 时必须提供 order_id 参数")
 
             target_order = next(
-                (o for o in unique_order_list if str(o.get("id")) == str(order_id)),
+                (o for o in order_list if str(o.get("id")) == str(order_id)),
                 None,
             )
             if not target_order:
