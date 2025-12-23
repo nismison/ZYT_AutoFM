@@ -102,6 +102,11 @@ ORDER_RULES = {
         "func": order_template_TTFX,
         "image_count": 3,
     },
+    "干粉灭火器月巡检": {
+        "template": "MHQ",
+        "func": order_template_MHQ,
+        "image_count": 1,
+    },
 }
 
 

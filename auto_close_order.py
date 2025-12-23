@@ -18,8 +18,7 @@ def auto_submit_task():
         handler = OrderHandler(fm, oss)
 
         logging.info("开始获取待处理工单列表...")
-        deal_data = fm.get_need_deal_list()
-        records = deal_data.get("records", [])
+        records = fm.get_need_deal_list()
 
         if not records:
             logging.info("没有待处理的工单")
@@ -32,8 +31,7 @@ def auto_submit_task():
         month = str('{:0>2d}'.format(today.month))
         day = str('{:0>2d}'.format(today.day))
 
-        deal_data = fm.get_need_deal_list()
-        records = [r for r in deal_data.get("records", []) if r['woType'] == 'PM' and r['endDealTime'][:10] == f'2025-{month}-{day}']
+        records = [r for r in fm.get_need_deal_list() if r['woType'] == 'PM' and r['endDealTime'][:10] == f'2025-{month}-{day}']
 
         msg = f"自动提交工单任务完成，剩余 {len(records)} 条"
         logging.info(msg)

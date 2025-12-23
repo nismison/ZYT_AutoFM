@@ -47,8 +47,7 @@ def complete_fm():
     fm = FMApi()
     oss = OSSClient(fm.session, fm.token)
     handler = OrderHandler(fm, oss)
-    deal_data = fm.get_need_deal_list()
-    records = deal_data.get("records", [])
+    records = fm.get_need_deal_list()
 
     try:
         result = None
@@ -165,7 +164,7 @@ def pending_process_fm():
         return jsonify({
             "success": True,
             "data": {
-                "items": records.get("records", [])
+                "items": records
             }
         })
     except Exception as e:

@@ -1,6 +1,8 @@
+import json
 import logging
 
 import requests
+from numpy.random import normal
 
 from config import FM_BASE_URL, HEADERS_BASE
 from db import UserInfo
@@ -59,7 +61,15 @@ class FMApi:
         url = f"{self.base}/order/task/list/2"
         payload = {"pageNum": page_number, "pageSize": 200, "projectList": []}
         data = self.request("POST", url, json=payload, headers=self.get_headers())
-        return data['data']
+        records = data.get("data", {}).get("records", [])
+        normal_orders = [r for r in records if '组合工单' not in r['title']]  # 普通工单
+        combined_orders = [r for r in records if '组合工单' in r['title']]  # 组合工单
+
+        sub_orders = []
+        for r in combined_orders:
+            sub_orders += self.get_order_detail(r['id']).get('subOrders', [])
+
+        return normal_orders + sub_orders
 
     def get_order_detail(self, order_id):
         url = f"{self.base}/order/task/detail/{order_id}"

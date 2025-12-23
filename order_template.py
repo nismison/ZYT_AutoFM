@@ -1,4 +1,7 @@
 # 消防通道
+from datetime import datetime
+
+
 def order_template_XFTD(order_id, marked_image1, marked_image2):
     return {
         "orderId": order_id,
@@ -446,76 +449,43 @@ def order_template_TTFX(order_id, marked_image1, marked_image2, marked_image3):
     }
 
 
-# 空置房巡查月巡检 workResult
-def order_template_KZF(objCodes: list, wrids: list, marked_image1: str, marked_image2: str, marked_image3: str,
-                       marked_image4: str):
-    return [
-        {
-            "objCode": objCodes[0],
-            "result": [
-                marked_image1
-            ],
-            "step": "1",
-            "type": "photograph",
-            "wrid": wrids[0]
-        },
-        {
-            "objCode": objCodes[1],
-            "result": [
-                marked_image2
-            ],
-            "step": "2",
-            "type": "photograph",
-            "wrid": wrids[1]
-        },
-        {
-            "objCode": objCodes[2],
-            "result": "正常",
-            "step": "3",
-            "type": "onechoose",
-            "wrid": wrids[2]
-        },
-        {
-            "objCode": objCodes[3],
-            "result": [
-                marked_image3
-            ],
-            "step": "3.1",
-            "type": "photograph",
-            "wrid": wrids[3]
-        },
-        {
-            "objCode": objCodes[4],
-            "result": [
-                "0"
-            ],
-            "step": "4",
-            "type": "estimate",
-            "wrid": wrids[4]
-        },
-        {
-            "objCode": objCodes[5],
-            "result": [
-                "0"
-            ],
-            "step": "5",
-            "type": "estimate",
-            "wrid": wrids[5]
-        },
-        {
-            "objCode": objCodes[6],
-            "result": [
-                marked_image4
-            ],
-            "step": "6",
-            "type": "photograph",
-            "wrid": wrids[6]
-        },
-        {
-            "objCode": objCodes[7],
-            "result": "无",
-            "step": "7",
-            "type": "describe",
-            "wrid": wrids[7]
+# 干粉灭火器巡检 workResult
+def order_template_MHQ(order_id, marked_image1):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "beginDealTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0",
+                    "stepDesc": "<p>检查灭火器箱体、瓶体、封铅、保险销、软管、喷嘴等部件是否变形、损坏、缺失；</p>"
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1",
+                    "stepDesc": "<p>检查压力表指针是否处于绿色区域；</p>"
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1,
+                    "stepDesc": "<p>对压力表指针进行拍照；</p>"
+                },
+                {
+                    "stepNo": "4",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1",
+                    "stepDesc": "<p>对手提式灭火器，双手握住瓶体上下颠倒摇晃数次（10-15次），防止干粉凝固；</p>"
+                },
+                {
+                    "stepNo": "5",
+                    "stepType": "DESCRIBE",
+                    "stepResult": "未过期",
+                    "stepDesc": "<p>检查完毕填写检查卡，若灭火器已到报废条件（出厂满10年）或检验日期过期应立即报事，并组织更换或送检。</p>"
+                }
+            ]
         }
-    ]
+    }
