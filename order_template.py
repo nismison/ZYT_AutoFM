@@ -1,7 +1,6 @@
-# 消防通道
 from datetime import datetime
 
-
+# 消防通道
 def order_template_XFTD(order_id, marked_image1, marked_image2):
     return {
         "orderId": order_id,
