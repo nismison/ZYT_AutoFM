@@ -65,11 +65,13 @@ class FMApi:
         normal_orders = [r for r in records if '组合工单' not in r['title']]  # 普通工单
         combined_orders = [r for r in records if '组合工单' in r['title']]  # 组合工单
 
-        sub_orders = []
+        need_deal_sub_orders = []
         for r in combined_orders:
-            sub_orders += self.get_order_detail(r['id']).get('subOrders', [])
+            sub_orders = self.get_order_detail(r['id']).get('subOrders', [])
+            not_complete_order = [r for r in sub_orders if r['statusName'] != '已完成']
+            need_deal_sub_orders += not_complete_order
 
-        return normal_orders + sub_orders
+        return normal_orders + need_deal_sub_orders
 
     def get_order_detail(self, order_id):
         url = f"{self.base}/order/task/detail/{order_id}"
