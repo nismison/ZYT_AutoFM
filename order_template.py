@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 
 # 消防通道
 def order_template_XFTD(order_id, marked_image1, marked_image2):
@@ -453,7 +453,7 @@ def order_template_MHQ(order_id, marked_image1):
     return {
         "orderId": order_id,
         "formData": {
-            "beginDealTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "beginDealTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "stepResult": [
                 {
                     "stepNo": "1",
