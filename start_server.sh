@@ -123,6 +123,43 @@ else
 fi
 
 # ============================
+# 3.5 启动 checkin_server.py（后台）
+# ============================
+CHECKIN_SERVER_SCRIPT="$REPO_PATH/checkin_server.py"
+CHECKIN_SERVER_PID=""
+
+if [ -f "$CHECKIN_SERVER_SCRIPT" ]; then
+  log "[INFO] 检查 checkin_server.py 是否已在运行..."
+
+  CHECKIN_EXISTING_PIDS=$(pgrep -f "$CHECKIN_SERVER_SCRIPT" || true)
+
+  if [ -n "$CHECKIN_EXISTING_PIDS" ]; then
+    log "[INFO] 检测到运行中的 checkin_server.py，PIDs: $CHECKIN_EXISTING_PIDS，准备重启..."
+
+    kill $CHECKIN_EXISTING_PIDS 2>/dev/null || true
+    sleep 2
+
+    CHECKIN_STILL_PIDS=$(pgrep -f "$CHECKIN_SERVER_SCRIPT" || true)
+    if [ -n "$CHECKIN_STILL_PIDS" ]; then
+      log "[WARN] 进程未完全退出，执行 kill -9: $CHECKIN_STILL_PIDS"
+      kill -9 $CHECKIN_STILL_PIDS 2>/dev/null || true
+      sleep 1
+    fi
+  else
+    log "[INFO] 未发现运行中的 checkin_server.py，直接启动。"
+  fi
+
+  log "[INFO] 启动后台 Checkin Server: $CHECKIN_SERVER_SCRIPT"
+  mkdir -p "$(dirname "$CHECKIN_SERVER_LOG")"
+  nohup "$VENV_PY" "$CHECKIN_SERVER_SCRIPT" >> "$CHECKIN_SERVER_LOG" 2>&1 &
+  CHECKIN_SERVER_PID=$!
+  log "[INFO] checkin_server.py 已在后台启动，PID: $CHECKIN_SERVER_PID"
+  echo "CHECKIN_SERVER_PID=$CHECKIN_SERVER_PID"
+else
+  log "[WARNING] 未找到 $CHECKIN_SERVER_SCRIPT，跳过 Checkin Server 启动。"
+fi
+
+# ============================
 # 4. 启动 Gunicorn（后台 + 清理旧进程 + 健康检查）
 # ============================
 
