@@ -30,13 +30,6 @@ def load_users():
             "banci": "day",
         },
         {
-            "name": "苏蓉",
-            "mobile": "17776684591",
-            "device_model": "VOG-AL00",
-            "device_uuid": "37E5FCD43526EE01",
-            "banci": "day",
-        },
-        {
             "name": "杨蒋倩",
             "mobile": "19978804634",
             "device_model": "V1962A",
@@ -239,6 +232,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    run_for_banci("day")
-    # run_for_banci("night")
+    main()
