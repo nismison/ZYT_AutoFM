@@ -98,9 +98,9 @@ def users_fm():
                 "id": u.id,
                 "name": u.name,
                 "userNumber": u.user_number,
-                "phone": u.phone,
-                "device_model": u.device_model,
-                "device_id": u.device_id,
+                "phone": u.phone or "",
+                "device_model": u.device_model or "",
+                "device_id": u.device_id or "",
             }
             for u in users
         ]
