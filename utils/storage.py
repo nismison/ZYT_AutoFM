@@ -31,22 +31,26 @@ def get_image_url(image_id: str, image_type: str = 'gallery') -> str:
 
 
 def get_random_template_file(category, sub_category=None):
-    """随机返回TemplatePic下指定目录的随机文件"""
+    """随机返回 TemplatePic 下指定目录的随机文件；若目录为空/不可用则返回 black.jpg（与 TemplatePic 同级）"""
+    fallback = "black.jpg"  # 与 TemplatePic 同一级目录
+
     try:
         if sub_category:
-            target_dir = f"TemplatePic/{category}/{sub_category}"
+            target_dir = os.path.join("TemplatePic", category, sub_category)
         else:
-            target_dir = f"TemplatePic/{category}"
+            target_dir = os.path.join("TemplatePic", category)
 
         if not os.path.isdir(target_dir):
-            return None
+            return fallback
 
-        files = [f for f in os.listdir(target_dir)
-                 if os.path.isfile(os.path.join(target_dir, f)) and not f.startswith('.')]
+        files = [
+            f for f in os.listdir(target_dir)
+            if os.path.isfile(os.path.join(target_dir, f)) and not f.startswith(".")
+        ]
 
-        return os.path.join(target_dir, random.choice(files)) if files else None
+        return os.path.join(target_dir, random.choice(files)) if files else fallback
     except Exception:
-        return None
+        return fallback
 
 
 def update_exif_datetime(image_path: str):
