@@ -1,5 +1,6 @@
 import datetime
 
+
 # 消防通道
 def order_template_XFTD(order_id, marked_image1, marked_image2):
     return {
@@ -486,5 +487,109 @@ def order_template_MHQ(order_id, marked_image1):
                     "stepDesc": "<p>检查完毕填写检查卡，若灭火器已到报废条件（出厂满10年）或检验日期过期应立即报事，并组织更换或送检。</p>"
                 }
             ]
+        }
+    }
+
+
+# 机动车充电区日巡检工单 workResult
+def order_template_JDCCDQ(order_id, marked_image1):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                }
+            ],
+            "beginDealTime": None
+        }
+    }
+
+
+# 非机动车停放处日巡查工单 workResult
+def order_template_FJDCTFC(order_id, marked_image1, marked_image2, marked_image3, marked_image4):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "READ",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "DESCRIBE",
+                    "stepResult": "无"
+                },
+                {
+                    "stepNo": "4",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image2
+                },
+                {
+                    "stepNo": "5",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image3
+                },
+                {
+                    "stepNo": "6",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "未配置"
+                },
+                {
+                    "stepNo": "7",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "8",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "9",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "10",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "11",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "12",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image4
+                },
+                {
+                    "stepNo": "13",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "正常"
+                }
+            ],
+            "beginDealTime": None
         }
     }

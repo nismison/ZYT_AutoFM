@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 import os
@@ -106,6 +105,16 @@ ORDER_RULES = {
         "template": "MHQ",
         "func": order_template_MHQ,
         "image_count": 1,
+    },
+    "机动车充电区日巡检工单": {
+        "template": "JDCCDQ",
+        "func": order_template_JDCCDQ,
+        "image_count": 1,
+    },
+    "非机动车停放处日巡查工单": {
+        "template": "FJDCTFC",
+        "func": order_template_FJDCTFC,
+        "image_count": 4,
     },
 }
 
