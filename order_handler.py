@@ -116,6 +116,11 @@ ORDER_RULES = {
         "func": order_template_FJDCTFC,
         "image_count": 4,
     },
+    "围墙周界报警日巡检（白）": {
+        "template": "WQZJ",
+        "func": order_template_WQZJ,
+        "image_count": 4,
+    },
 }
 
 

@@ -593,3 +593,60 @@ def order_template_FJDCTFC(order_id, marked_image1, marked_image2, marked_image3
             "beginDealTime": None
         }
     }
+
+
+# 围墙周界报警日巡检（白） workResult
+def order_template_WQZJ(order_id, marked_image1, marked_image2, marked_image3):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "4",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "5",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image2
+                },
+                {
+                    "stepNo": "6",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "7",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "1"
+                },
+                {
+                    "stepNo": "8",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image3
+                },
+                {
+                    "stepNo": "9",
+                    "stepType": "DESCRIBE",
+                    "stepResult": "无"
+                }
+            ],
+            "beginDealTime": None
+        }
+    }
