@@ -6,7 +6,8 @@ from flask import Flask, request
 from flask_cors import CORS
 
 from config import db
-from db import init_database_connection, create_tables_once, close_database_connection
+from db import init_database_connection, create_tables_once, close_database_connection, UserInfo
+from order_handler import init_template_pic_dirs
 from routes import register_blueprints
 from utils.logger import log_line
 
@@ -104,6 +105,16 @@ def safe_query_dict():
     return safe
 
 
+def init_all_users_template_dirs() -> None:
+    for (user_number,) in (
+            UserInfo.select(UserInfo.user_number).tuples().iterator()
+    ):
+        try:
+            init_template_pic_dirs(user_number)
+        except Exception:
+            pass
+
+
 # ==================================================
 # Flask 应用
 # ==================================================
@@ -197,6 +208,9 @@ def create_app() -> Flask:
 
     # CORS
     CORS(app, resources=r"/*")
+
+    # 初始化所有用户的模板目录
+    init_all_users_template_dirs()
 
     return app
 
