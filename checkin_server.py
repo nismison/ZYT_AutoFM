@@ -1,6 +1,7 @@
 import json
-import os
 import random
+import threading
+import time
 from datetime import datetime
 
 import requests
@@ -12,9 +13,30 @@ from wxpusher import WxPusher
 TZ = ZoneInfo("Asia/Shanghai")  # 按你的业务地点设置时区（很关键）
 
 
+class Notify:
+    def __init__(self):
+        self.uids = ['UID_0UhoJ977fvwsJhzXokMmhzgIqFRZ']
+        self.token = 'AT_a5ARmQl4Mi8mCjv6xImNDesNfjSla8OW'
+
+    def _send_sync(self, text: str) -> None:
+        try:
+            WxPusher.send_message(text, uids=self.uids, token=self.token)
+        except Exception:
+            # “尝试发送”：失败无所谓，直接吞掉
+            pass
+
+    def send(self, text: str) -> None:
+        # 异步发送：不阻塞主流程
+        t = threading.Thread(target=self._send_sync, args=(text,), daemon=True)
+        t.start()
+
+
+notify = Notify()
+
+
 def load_users():
     """加载用户列表（示例结构）。"""
-    return [
+    user_list = [
         {
             "name": "梁振卓",
             "mobile": "19127224860",
@@ -45,25 +67,10 @@ def load_users():
         },
     ]
 
+    # 随机打乱
+    random.shuffle(user_list)
 
-def filter_by_env(users):
-    """
-    支持环境变量 ZYT_CHECKIN_USERS="张三/李四" 这种白名单过滤。
-    """
-    allow = os.getenv("ZYT_CHECKIN_USERS")
-    if not allow:
-        return users
-    allow_set = set(allow.split("/"))
-    return [u for u in users if u["name"] in allow_set]
-
-
-class Notify:
-    def __init__(self):
-        self.uids = ['UID_0UhoJ977fvwsJhzXokMmhzgIqFRZ']
-        self.token = 'AT_a5ARmQl4Mi8mCjv6xImNDesNfjSla8OW'
-
-    def send(self, text):
-        WxPusher.send_message(text, uids=self.uids, token=self.token)
+    return user_list
 
 
 def generate_random_coordinates():
@@ -146,7 +153,6 @@ def checkin(name, mobile, device_model, device_uuid):
         'X-Mobile': mobile,
     }
 
-    notify = Notify()
     response = requests.post(url, data=json.dumps(payload), headers=headers)
 
     if response.status_code == 200:
@@ -170,14 +176,17 @@ def task(user: dict):
 
 
 def run_for_banci(banci: str):
-    users = filter_by_env(load_users())
+    time.sleep(random.randint(60, 180))
+    users = load_users()
     targets = [u for u in users if u.get("banci") == banci]
     for u in targets:
+        time.sleep(random.randint(30, 60))
         try:
             task(u)
         except Exception as e:
             now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{now}] ERROR user={u.get('name')} err={e!r}")
+            notify.send(f"[{now}] ERROR user={u.get('name')} err={e!r}")
 
 
 def main():
