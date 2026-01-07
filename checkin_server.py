@@ -10,6 +10,8 @@ from apscheduler.triggers.cron import CronTrigger
 from backports.zoneinfo import ZoneInfo
 from wxpusher import WxPusher
 
+from utils.logger import log_line
+
 TZ = ZoneInfo("Asia/Shanghai")  # 按你的业务地点设置时区（很关键）
 
 
@@ -190,6 +192,7 @@ def run_for_banci(banci: str):
 
 
 def main():
+    log_line("[INFO] [checkin_server] 签到服务已启动")
     scheduler = BlockingScheduler(timezone=TZ)
 
     # day：07:50 / 20:01
