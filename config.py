@@ -9,11 +9,10 @@ from utils.ip_address import get_real_lan_ip
 load_dotenv()
 IS_DEV = os.getenv("ENV") == "dev"
 
-LOG_PATH = "/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log"
+LOG_PATH = "/root/ZYT_AutoFM/gunicorn_error.log"
 
 # ==================== 自动工单配置 ====================
 BASE_URL = f"http://{get_real_lan_ip()}:5001" if IS_DEV else "https://api.zytsy.icu"
-BAICHUAN_PROXY_URL = f"http://{get_real_lan_ip()}:8000" if IS_DEV else "https://baichuan.zytsy.icu"
 
 FM_BASE_URL = "https://chuanplus-client.onewo.com/api/client"
 # 转发接口
@@ -25,12 +24,12 @@ HEADERS_BASE = {
 }
 
 # ==================== 青龙配置 ====================
-QL_BASE_URL = "http://ql.zytsy.icu" if IS_DEV else "http://127.0.0.1:15700"
+QL_BASE_URL = "http://ql.zytsy.icu"
 QL_CLIENT_ID = "i-v-Y0pCCP1m"
 QL_CLIENT_SECRET = "l0_EIhFAT-m2EkvA3IdK3L6I"
 # ==================== immich配置 ====================
 IMMICH_API_KEY = '9zYuNvGF9ZGTOrqULYL5hoWc6JfRBx7wdN44tdb2w'
-IMMICH_URL = 'https://immich.zytsy.icu/api' if IS_DEV else 'http://127.0.0.1:2283/api'
+IMMICH_URL = 'https://immich.zytsy.icu/api'
 # 宿主机上 External Library 对应的真实路径（你的服务看到的是这个）
 IMMICH_EXTERNAL_HOST_ROOT = "/immich-external-library"
 # Immich 容器里看到的同一目录路径（External Library Import Path 配的就是它）
