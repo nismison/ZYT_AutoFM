@@ -45,7 +45,7 @@ jobs:
             ssh -o PreferredAuthentications=password \
                 -o PubkeyAuthentication=no \
                 -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                'bash /www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/deploy_update.sh' \
+                'bash /root/ZYT_AutoFM/deploy_update.sh' \
             | tee deploy.log
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

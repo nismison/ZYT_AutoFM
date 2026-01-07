@@ -12,7 +12,7 @@ def git_pull():
         :raises keyError: 无
         """
 
-    repo_path = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
+    repo_path = '/root/ZYT_AutoFM'
 
     # 强制覆盖本地的标准命令组合
     cmd = (

@@ -2,7 +2,7 @@
 # 仅用于配置 Gunicorn 参数，不做任何业务逻辑
 
 # 项目目录
-chdir = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM'
+chdir = '/root/ZYT_AutoFM'
 
 # worker 数量（根据 CPU 核心数和实际负载调节）
 workers = 4
@@ -20,7 +20,7 @@ worker_class = 'sync'
 bind = '127.0.0.1:5001'
 
 # PID 文件
-pidfile = '/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM/gunicorn.pid'
+pidfile = '/root/ZYT_AutoFM/gunicorn.pid'
 
 # 日志路径
 accesslog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_access.log'

@@ -14,7 +14,7 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-REPO_PATH="/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM"
+REPO_PATH="/root/ZYT_AutoFM"
 START_SCRIPT="$REPO_PATH/start_server.sh"
 
 log "[INFO] 当前执行用户: $(whoami)"

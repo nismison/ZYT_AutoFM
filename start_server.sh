@@ -17,18 +17,18 @@ log() {
 # ============================
 # 基本路径配置
 # ============================
-REPO_PATH="/www/dk_project/dk_app/qinglong/QingLong/data/scripts/ZYT_AutoFM"
+REPO_PATH="/root/ZYT_AutoFM"
 
-VENV_PY="/www/server/pyporject_evn/3820/bin/python3.8"
-GUNICORN_BIN="/www/server/pyporject_evn/3820/bin/gunicorn"
+VENV_PY="python3"
+GUNICORN_BIN="gunicorn"
 GUNICORN_CONF="$REPO_PATH/gunicorn_conf.py"
 APP_MODULE="flask_server:app"
 
 # 日志路径
-WORKER_LOG="/www/wwwlogs/python/ZYT_AutoFM/upload_worker.log"
-MERGE_WORKER_LOG="/www/wwwlogs/python/ZYT_AutoFM/merge_worker.log"
-GUNICORN_LOG="/www/wwwlogs/python/ZYT_AutoFM/gunicorn.log"
-CHECKIN_SERVER_LOG="/www/wwwlogs/python/ZYT_AutoFM/checkin_server.log"
+WORKER_LOG="/root/ZYT_AutoFM/upload_worker.log"
+MERGE_WORKER_LOG="/root/ZYT_AutoFM/merge_worker.log"
+GUNICORN_LOG="/root/ZYT_AutoFM/gunicorn.log"
+CHECKIN_SERVER_LOG="/root/ZYT_AutoFM/checkin_server.log"
 
 log "[INFO] 当前执行用户: $(whoami)"
 
