@@ -23,8 +23,8 @@ bind = '127.0.0.1:5001'
 pidfile = '/root/ZYT_AutoFM/gunicorn.pid'
 
 # 日志路径
-accesslog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_access.log'
-errorlog = '/www/wwwlogs/python/ZYT_AutoFM/gunicorn_error.log'
+accesslog = '/root/ZYT_AutoFM/gunicorn_access.log'
+errorlog = '/root/ZYT_AutoFM/gunicorn_error.log'
 
 # 日志级别
 loglevel = 'info'
