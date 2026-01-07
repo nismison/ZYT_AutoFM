@@ -66,10 +66,15 @@ class FMApi:
         combined_orders = [r for r in records if '组合工单' in r['title']]  # 组合工单
 
         need_deal_sub_orders = []
-        for r in combined_orders:
-            sub_orders = self.get_order_detail(r['id']).get('subOrders', [])
-            not_complete_order = [r for r in sub_orders if r['statusName'] != '已完成']
-            need_deal_sub_orders += not_complete_order
+        # for r in combined_orders:
+        #     sub_orders = self.get_order_detail(r['id']).get('subOrders', [])
+        #     not_complete_order = [r for r in sub_orders if r['statusName'] != '已完成']
+        #     need_deal_sub_orders += not_complete_order
+
+        # 只取一个组合工单，避免获取多个工单导致速度慢
+        sub_orders = self.get_order_detail(combined_orders[0]['id']).get('subOrders', [])
+        not_complete_order = [r for r in sub_orders if r['statusName'] != '已完成']
+        need_deal_sub_orders += not_complete_order
 
         return normal_orders + need_deal_sub_orders
 
