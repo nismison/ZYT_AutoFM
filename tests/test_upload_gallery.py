@@ -8,7 +8,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 from apis.immich_api import IMMICHApi
-from config import BASE_URL
+from config import BASE_URL, TZ
 
 
 @pytest.fixture(scope="module")
@@ -22,7 +22,7 @@ def test_image():
     """生成一张测试图片并返回内存对象及MD5"""
     img = Image.new("RGB", (800, 600), color=(80, 140, 220))
     draw = ImageDraw.Draw(img)
-    text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    text = datetime.datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
     try:
         font = ImageFont.truetype("static/siyuansongti.ttf", 32)
     except Exception:

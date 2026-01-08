@@ -5,6 +5,7 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from apis.fm_api import FMApi
+from config import TZ
 from db import UserInfo
 from order_handler import OrderHandler
 from oss_client import OSSClient
@@ -278,7 +279,7 @@ def checkin_fm():
             }), 500
 
         # 获取当前时间并格式化
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
         geo_data = generate_random_coordinates()
 
         payload = {

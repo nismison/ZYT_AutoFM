@@ -12,7 +12,7 @@ from peewee import (
     BooleanField,
 )
 
-from config import db
+from config import db, TZ
 from utils.logger import log_line
 
 # 告诉 peewee 使用 PyMySQL 作为 MySQLdb
@@ -71,7 +71,7 @@ class File(BaseModel):
     updated_at = DateTimeField(default=datetime.now)
 
     def save(self, *args, **kwargs):
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(TZ)
         return super().save(*args, **kwargs)
 
     class Meta:
@@ -111,7 +111,7 @@ class UploadSession(BaseModel):
     updated_at = DateTimeField(default=datetime.now)
 
     def save(self, *args, **kwargs):
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(TZ)
         return super().save(*args, **kwargs)
 
     class Meta:

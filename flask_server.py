@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 from flask import Flask, request
 from flask_cors import CORS
 
-from config import db
+from config import db, TZ
 from db import init_database_connection, create_tables_once, close_database_connection, UserInfo
 from order_handler import init_template_pic_dirs
 from routes import register_blueprints
@@ -16,7 +16,7 @@ from utils.logger import log_line
 # 工具函数
 # ==================================================
 def now() -> str:
-    return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    return datetime.now(TZ).strftime("[%Y-%m-%d %H:%M:%S]")
 
 
 def detect_file_type(filename: str) -> str:

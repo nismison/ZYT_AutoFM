@@ -1,12 +1,11 @@
 import json
 import re
 import time
-import threading
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from zoneinfo import ZoneInfo
+from config import TZ
 
 import requests
 from peewee import DoesNotExist
@@ -18,7 +17,6 @@ BAICHUAN_AUTH_URL = "https://chuanplus-client.onewo.com/api/client/auth/index?ur
 # 百川 / COS token 的统一刷新阈值：10 分钟
 REFRESH_THRESHOLD_SECONDS = 10 * 60
 COS_STS_URL = "https://chuanplus-client.onewo.com/api/client/file/sts/sts-token"
-TZ = ZoneInfo("Asia/Shanghai")  # 按你的业务地点设置时区（很关键）
 
 
 def fetch_baichuan_token(zyt_token: str) -> Optional[Tuple[str, int]]:

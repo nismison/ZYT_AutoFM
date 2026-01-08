@@ -1,5 +1,7 @@
 import datetime
 
+from config import TZ
+
 
 # 消防通道
 def order_template_XFTD(order_id, marked_image1, marked_image2):
@@ -454,7 +456,7 @@ def order_template_MHQ(order_id, marked_image1):
     return {
         "orderId": order_id,
         "formData": {
-            "beginDealTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "beginDealTime": datetime.datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S"),
             "stepResult": [
                 {
                     "stepNo": "1",

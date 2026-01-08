@@ -7,7 +7,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from pyzbar.pyzbar import decode as decode_qr
 
-from config import BASE_URL
+from config import BASE_URL, TZ
 from utils.crypter import decrypt_with_string_key  # ✅ 你的解密方法
 
 # Flask 接口地址
@@ -68,8 +68,8 @@ def try_decrypt_qrdata(qr_data: str):
 
 def upload_images(merge: bool):
     """上传9张测试图片"""
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    now = datetime.datetime.now().strftime("%H:%M")
+    today = datetime.datetime.now(TZ).strftime("%Y-%m-%d")
+    now = datetime.datetime.now(TZ).strftime("%H:%M")
     name = "梁振卓"
     user_number = "2409840"
 

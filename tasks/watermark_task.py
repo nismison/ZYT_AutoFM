@@ -6,6 +6,7 @@ import qrcode
 from PIL import Image, ImageDraw
 from PIL import ImageFont
 
+from config import TZ
 from utils.crypter import create_watermark_data, encrypt_watermark
 
 try:
@@ -320,7 +321,7 @@ def add_watermark_to_image(original_image_path: str,
     )
 
     if output_path is None:
-        output_path = f"watermarked_{int(datetime.now().timestamp())}.jpg"
+        output_path = f"watermarked_{int(datetime.now(TZ).timestamp())}.jpg"
 
     base_image.save(output_path, "JPEG", quality=85, optimize=False)
     return output_path

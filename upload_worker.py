@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 from apis.immich_api import IMMICHApi
-from config import IMMICH_TARGET_ALBUM_ID, IMMICH_EXTERNAL_CONTAINER_ROOT, IMMICH_EXTERNAL_HOST_ROOT
+from config import IMMICH_TARGET_ALBUM_ID, IMMICH_EXTERNAL_CONTAINER_ROOT, IMMICH_EXTERNAL_HOST_ROOT, TZ
 from db import UploadTask, UploadRecord
 from utils.logger import log_line
 
@@ -51,7 +51,7 @@ def task_worker():
             # 抢占任务
             rows = (
                 UploadTask
-                .update(status="processing", updated_at=datetime.now())
+                .update(status="processing", updated_at=datetime.now(TZ))
                 .where(UploadTask.id == task.id, UploadTask.status == "pending")
                 .execute()
             )
@@ -65,7 +65,7 @@ def task_worker():
                 log_line(f"[ERROR] 任务 {task.id} 对应文件不存在: {task.tmp_path}")
                 (
                     UploadTask
-                    .update(status="failed", updated_at=datetime.now(), retry=task.retry + 1)
+                    .update(status="failed", updated_at=datetime.now(TZ), retry=task.retry + 1)
                     .where(UploadTask.id == task.id)
                     .execute()
                 )
@@ -116,7 +116,7 @@ def task_worker():
                 UploadRecord.create(
                     oss_url="immich-external",
                     file_size=os.path.getsize(host_path),
-                    upload_time=datetime.now(),
+                    upload_time=datetime.now(TZ),
                     original_filename=task.original_filename,
                     width=0,
                     height=0,
@@ -133,7 +133,7 @@ def task_worker():
             # 标记任务完成
             (
                 UploadTask
-                .update(status="done", updated_at=datetime.now())
+                .update(status="done", updated_at=datetime.now(TZ))
                 .where(UploadTask.id == task.id)
                 .execute()
             )
@@ -160,7 +160,7 @@ def task_worker():
 
                     (
                         UploadTask
-                        .update(status="failed", retry=new_retry, updated_at=datetime.now())
+                        .update(status="failed", retry=new_retry, updated_at=datetime.now(TZ))
                         .where(UploadTask.id == task.id)
                         .execute()
                     )
@@ -168,7 +168,7 @@ def task_worker():
                     backoff = min(5 * new_retry, 20)
                     (
                         UploadTask
-                        .update(status="pending", retry=new_retry, updated_at=datetime.now())
+                        .update(status="pending", retry=new_retry, updated_at=datetime.now(TZ))
                         .where(UploadTask.id == task.id)
                         .execute()
                     )

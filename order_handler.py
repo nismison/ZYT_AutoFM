@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from typing import Optional, Literal, List
 
+from config import TZ
 from order_template import *
 from tasks.watermark_task import add_watermark_to_image
 from utils.custom_raise import *
@@ -287,7 +288,7 @@ class OrderHandler:
 
         # watermark_times[i] 对应第 i 张图的时间
         watermark_times: List[datetime.datetime] = [None] * image_count  # type: ignore
-        current_dt = datetime.datetime.now()
+        current_dt = datetime.datetime.now(TZ)
 
         # 从最后一张往前推：
         # - 最后一张 = now

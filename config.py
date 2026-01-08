@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from peewee import MySQLDatabase
 
 from utils.ip_address import get_real_lan_ip
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo("Asia/Shanghai")
 
 load_dotenv()
 IS_DEV = os.getenv("ENV") == "dev"

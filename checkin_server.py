@@ -7,12 +7,10 @@ from datetime import datetime
 import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
-from zoneinfo import ZoneInfo
 from wxpusher import WxPusher
 
 from utils.logger import log_line
-
-TZ = ZoneInfo("Asia/Shanghai")  # 按你的业务地点设置时区（很关键）
+from config import TZ
 
 
 class Notify:
@@ -94,7 +92,7 @@ def checkin(name, mobile, device_model, device_uuid):
     url = "https://api.vankeservice.com/api/app/staffs/saveSignedCard"
 
     # 获取当前时间并格式化
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_time = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
     geo_data = generate_random_coordinates()
 
     payload = {

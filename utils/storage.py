@@ -6,7 +6,7 @@ from datetime import datetime
 
 from PIL import Image, ExifTags
 
-from config import BASE_URL
+from config import BASE_URL, TZ
 
 
 def get_local_iso8601():
@@ -14,7 +14,7 @@ def get_local_iso8601():
     返回带时区并带冒号的 ISO8601 时间，例如：
     2025-11-13T10:20:00+08:00
     """
-    now = datetime.now().astimezone()
+    now = datetime.now(TZ).astimezone()
     # 先拿到 +0800
     tz_raw = now.strftime("%z")  # "+0800"
     # 插入冒号 → "+08:00"
@@ -58,7 +58,7 @@ def update_exif_datetime(image_path: str):
     try:
         img = Image.open(image_path)
         exif = img.getexif()
-        now_str = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+        now_str = datetime.now(TZ).strftime("%Y:%m:%d %H:%M:%S")
 
         # 找到 DateTime、DateTimeOriginal、DateTimeDigitized 的 tag ID
         TAGS = {v: k for k, v in ExifTags.TAGS.items()}
@@ -83,7 +83,7 @@ def fix_video_metadata(src_path: str, dst_path: str) -> None:
     :returns: None
     :raises RuntimeError: ffmpeg 执行失败时抛出异常
     """
-    now = datetime.now().astimezone()
+    now = datetime.now(TZ).astimezone()
     timestamp = now.isoformat(timespec="seconds")  # 例如 2025-11-14T12:43:49+08:00
 
     cmd = [

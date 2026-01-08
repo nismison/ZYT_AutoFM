@@ -8,7 +8,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request, render_template
 from werkzeug.utils import secure_filename
 
-from config import WATERMARK_STORAGE_DIR, IMMICH_EXTERNAL_HOST_ROOT
+from config import WATERMARK_STORAGE_DIR, IMMICH_EXTERNAL_HOST_ROOT, TZ
 from db import UploadRecord, UploadTask
 from tasks.watermark_task import watermark_runner
 from utils.logger import log_line
@@ -129,9 +129,9 @@ def upload_with_watermark():
                 "%Y-%m-%d %H:%M"
             )
         else:
-            curr = datetime.now()
+            curr = datetime.now(TZ)
 
-        base_date_str = base_date or datetime.now().strftime("%Y-%m-%d")
+        base_date_str = base_date or datetime.now(TZ).strftime("%Y-%m-%d")
 
         temp_paths = []
         task_args_list = []
@@ -147,7 +147,7 @@ def upload_with_watermark():
             f.save(ori_path)
             temp_paths.append(ori_path)
 
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(TZ).strftime("%Y%m%d_%H%M%S")
             suffix_code = generate_random_suffix()
             image_id = f"{user_number}_{ts}_{suffix_code}"
             out_file = os.path.join(
@@ -169,7 +169,7 @@ def upload_with_watermark():
 
         if merge and len(result_meta) > 1:
             merged = merge_images_grid([p for _, p in result_meta])
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(TZ).strftime("%Y%m%d_%H%M%S")
             suffix_code = generate_random_suffix()
             merged_id = f"{user_number}_{ts}_{suffix_code}_merged"
             merged_file = os.path.join(
