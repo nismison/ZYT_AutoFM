@@ -52,8 +52,8 @@ WATERMARK_STORAGE_DIR = os.path.join(os.path.dirname(__file__), 'storage', 'wate
 
 MYSQL_DB_NAME = os.getenv("MYSQL_DB_NAME", "uploads")
 MYSQL_DB_USER = os.getenv("MYSQL_DB_USER", "root")
-MYSQL_DB_PASSWORD = os.getenv("MYSQL_DB_PASSWORD", "c1a8d4fa5cb3016d")
-MYSQL_DB_HOST = os.getenv("MYSQL_DB_HOST", "83.229.123.98")
+MYSQL_DB_PASSWORD = os.getenv("MYSQL_DB_PASSWORD", "lzz22222222")
+MYSQL_DB_HOST = os.getenv("MYSQL_DB_HOST", "43.251.227.18")
 MYSQL_DB_PORT = int(os.getenv("MYSQL_DB_PORT", "3306"))
 
 db = MySQLDatabase(
