@@ -161,69 +161,50 @@ else
 fi
 
 # ============================
-# 4. 启动 Gunicorn（后台 + 清理旧进程 + 健康检查）
+# 4. 启动 Gunicorn（强一致性）
 # ============================
 
-GUNICORN_PIDFILE="$REPO_PATH/gunicorn.pid"
+log "[INFO] 清理旧的 gunicorn 进程..."
 
-# 4.1 确认配置文件存在
-if [ ! -f "$GUNICORN_CONF" ]; then
-  log "[ERROR] Gunicorn 配置文件不存在，GUNICORN_CONF 实际值为: $(printf '%q\n' "$GUNICORN_CONF")"
-  echo "GUNICORN_PID=0"
+GUNICORN_PIDS=$(pgrep -f "/usr/local/bin/gunicorn" || true)
+
+if [ -n "$GUNICORN_PIDS" ]; then
+  log "[INFO] 发现旧 gunicorn 进程: $GUNICORN_PIDS，准备终止"
+
+  # 先优雅 kill
+  kill $GUNICORN_PIDS 2>/dev/null || true
+  sleep 3
+
+  # 再次检查
+  STILL_PIDS=$(pgrep -f "/usr/local/bin/gunicorn" || true)
+  if [ -n "$STILL_PIDS" ]; then
+    log "[WARN] gunicorn 未完全退出，执行 kill -9: $STILL_PIDS"
+    kill -9 $STILL_PIDS 2>/dev/null || true
+    sleep 1
+  fi
+else
+  log "[INFO] 未发现运行中的 gunicorn"
+fi
+
+# 确认清干净
+if pgrep -f "/usr/local/bin/gunicorn" >/dev/null; then
+  log "[ERROR] gunicorn 进程仍存在，拒绝启动新实例"
   exit 1
 fi
 
-# 4.2 如果存在旧的 Gunicorn（通过 pidfile），先优雅停止
-if [ -f "$GUNICORN_PIDFILE" ]; then
-  OLD_PID="$(cat "$GUNICORN_PIDFILE" 2>/dev/null || echo "")"
-
-  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-    log "[INFO] 检测到已运行的 Gunicorn（PID=$OLD_PID），准备重启..."
-
-    # 优雅停止
-    kill "$OLD_PID" 2>/dev/null || true
-
-    # 最多等 10 秒让它退出
-    for i in {1..10}; do
-      if kill -0 "$OLD_PID" 2>/dev/null; then
-        sleep 1
-      else
-        break
-      fi
-    done
-
-    # 如果还活着，强制 kill -9
-    if kill -0 "$OLD_PID" 2>/dev/null; then
-      log "[WARN] Gunicorn 仍在运行，执行 kill -9 $OLD_PID"
-      kill -9 "$OLD_PID" 2>/dev/null || true
-      sleep 1
-    fi
-  else
-    log "[INFO] 发现旧的 pidfile 但进程不存在，清理 pidfile。"
-  fi
-
-  # 清理掉旧 pidfile（避免 gunicorn 拿到坏 pid）
-  rm -f "$GUNICORN_PIDFILE" 2>/dev/null || true
-fi
-
-# 4.3 启动新的 Gunicorn（后台）
-log "[INFO] 以后台方式启动 Gunicorn 服务..."
-log "[INFO] 命令: $GUNICORN_BIN -c $GUNICORN_CONF $APP_MODULE"
-
-mkdir -p "$(dirname "$GUNICORN_LOG")"
+log "[INFO] 启动新的 gunicorn 实例"
 
 nohup "$GUNICORN_BIN" -c "$GUNICORN_CONF" "$APP_MODULE" >> "$GUNICORN_LOG" 2>&1 &
 GUNICORN_PID=$!
+
 sleep 3
 
-# 4.4 健康检查：确认新 Gunicorn 还在跑
 if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
-  log "[ERROR] Gunicorn 启动失败，PID: $GUNICORN_PID，详情见日志: $GUNICORN_LOG"
-  echo "GUNICORN_PID=0"
+  log "[ERROR] gunicorn 启动失败，PID=$GUNICORN_PID"
   exit 1
 fi
 
-log "[INFO] Gunicorn 已在后台启动，PID: $GUNICORN_PID"
+log "[INFO] gunicorn 启动成功，master PID=$GUNICORN_PID"
 echo "GUNICORN_PID=$GUNICORN_PID"
 
 log "[INFO] 启动流程完成。所有服务已在后台运行。"

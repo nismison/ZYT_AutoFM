@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-
 # health_check.sh
-# 严格健康检查：
-# - upload_worker.py
-# - merge_worker.py
-# - checkin_server.py
-# - gunicorn
+# 严格健康检查（工程级）
 #
-# 规则：
-#   有且仅有 1 个进程 => OK
-#   0 个或 >1 个 => FAIL
+# upload_worker / merge_worker / checkin_server:
+#   - 有且仅有 1 个进程
 #
-# 退出码：
-#   0 = 全部健康
-#   1 = 任一服务异常
+# gunicorn:
+#   - master = 1
+#   - worker >= 1
+#
+# exit code:
+#   0 = 全部正常
+#   1 = 任一异常
 
 set -euo pipefail
 
@@ -22,7 +20,7 @@ REPO_PATH="/root/ZYT_AutoFM"
 UPLOAD_WORKER="$REPO_PATH/upload_worker.py"
 MERGE_WORKER="$REPO_PATH/merge_worker.py"
 CHECKIN_SERVER="$REPO_PATH/checkin_server.py"
-GUNICORN_KEYWORD="gunicorn"
+GUNICORN_BIN="/usr/local/bin/gunicorn"
 
 EXIT_CODE=0
 
@@ -30,74 +28,89 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
+fail() {
+  log "[FAIL] $*"
+  EXIT_CODE=1
+}
+
+ok() {
+  log "[OK] $*"
+}
+
+# ============================
+# 单实例进程检查
+# ============================
 check_single_process() {
   local name="$1"
   local pattern="$2"
 
-  # pgrep -f：按完整命令行匹配
   local pids
   pids="$(pgrep -f "$pattern" || true)"
   local count
   count="$(echo "$pids" | sed '/^\s*$/d' | wc -l)"
 
   if [ "$count" -eq 1 ]; then
-    log "[OK] $name 正常运行，PID: $pids"
+    ok "$name 正常运行，PID=$pids"
   elif [ "$count" -eq 0 ]; then
-    log "[FAIL] $name 未运行"
-    EXIT_CODE=1
+    fail "$name 未运行"
   else
-    log "[FAIL] $name 进程数异常（$count 个），PIDs: $pids"
-    EXIT_CODE=1
+    fail "$name 进程数异常($count)，PIDs=$pids"
   fi
 }
 
-log "[INFO] 开始服务健康检查..."
+# ============================
+# Gunicorn 检查（master / worker）
+# ============================
+check_gunicorn() {
+  local pids
+  pids="$(pgrep -f "$GUNICORN_BIN" || true)"
 
-# ============================
-# upload_worker
-# ============================
-check_single_process "upload_worker" "$UPLOAD_WORKER"
-
-# ============================
-# merge_worker
-# ============================
-check_single_process "merge_worker" "$MERGE_WORKER"
-
-# ============================
-# checkin_server
-# ============================
-check_single_process "checkin_server" "$CHECKIN_SERVER"
-
-# ============================
-# gunicorn
-# 说明：
-# - 不使用 pidfile
-# - 不假设 worker 数
-# - 只检查 master 进程
-# ============================
-check_single_process "gunicorn(master)" "$GUNICORN_KEYWORD: master"
-
-# 兜底（某些 gunicorn 启动参数不显示 master）
-if [ "$EXIT_CODE" -eq 0 ]; then
-  :
-else
-  # 如果 master 匹配失败，再用宽松规则检测一次
-  GUNICORN_PIDS="$(pgrep -f "$GUNICORN_KEYWORD" || true)"
-  GUNICORN_COUNT="$(echo "$GUNICORN_PIDS" | sed '/^\s*$/d' | wc -l)"
-
-  if [ "$GUNICORN_COUNT" -eq 1 ]; then
-    log "[WARN] gunicorn 未匹配到 master 标识，但仅有一个进程存在，PID: $GUNICORN_PIDS"
-    EXIT_CODE=0
+  if [ -z "$pids" ]; then
+    fail "gunicorn 未运行"
+    return
   fi
-fi
+
+  local masters=()
+  local workers=()
+
+  for pid in $pids; do
+    local ppid
+    ppid="$(ps -o ppid= -p "$pid" | tr -d ' ')"
+
+    if echo "$pids" | grep -qw "$ppid"; then
+      workers+=("$pid")
+    else
+      masters+=("$pid")
+    fi
+  done
+
+  if [ "${#masters[@]}" -ne 1 ]; then
+    fail "gunicorn master 数异常(${#masters[@]})，PIDs=${masters[*]:-none}"
+  else
+    ok "gunicorn master 正常，PID=${masters[0]}"
+  fi
+
+  if [ "${#workers[@]}" -lt 1 ]; then
+    fail "gunicorn worker 不存在"
+  else
+    ok "gunicorn worker 数量=${#workers[@]}，PIDs=${workers[*]}"
+  fi
+}
 
 # ============================
-# 结果
+# 执行检查
 # ============================
+log "[INFO] 开始健康检查"
+
+check_single_process "upload_worker" "$UPLOAD_WORKER"
+check_single_process "merge_worker" "$MERGE_WORKER"
+check_single_process "checkin_server" "$CHECKIN_SERVER"
+check_gunicorn
+
 if [ "$EXIT_CODE" -eq 0 ]; then
-  log "[INFO] 健康检查通过：所有服务状态正常"
+  log "[INFO] 所有服务健康"
 else
-  log "[ERROR] 健康检查失败：存在异常服务"
+  log "[ERROR] 存在异常服务"
 fi
 
 exit "$EXIT_CODE"
