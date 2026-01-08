@@ -1,7 +1,7 @@
 auto_upload:
-  video_enable: true  # 是否自动上传视频
+  video_enable: false  # 是否自动上传视频
   image_enable: true  # 是否自动上传图片
-  max_upload_num: 1  # 最大并发上传数
+  max_upload_num: 3  # 最大并发上传数
   max_upload_size: 30  # 最大上传文件大小
 
   # 排除的设备
