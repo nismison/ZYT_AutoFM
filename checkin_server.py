@@ -7,7 +7,7 @@ from datetime import datetime
 import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
-from zoneinfo import ZoneInfo
+from backports.zoneinfo import ZoneInfo
 from wxpusher import WxPusher
 
 from utils.logger import log_line

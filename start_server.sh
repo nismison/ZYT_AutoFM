@@ -19,8 +19,8 @@ log() {
 # ============================
 REPO_PATH="/root/ZYT_AutoFM"
 
-VENV_PY="python3"
-GUNICORN_BIN="gunicorn"
+VENV_PY="/www/server/pyporject_evn/3820/bin/python3.8"
+GUNICORN_BIN="/www/server/pyporject_evn/3820/bin/gunicorn"
 GUNICORN_CONF="$REPO_PATH/gunicorn_conf.py"
 APP_MODULE="flask_server:app"
 
