@@ -78,7 +78,7 @@ if [ -f "$WORKER_SCRIPT" ]; then
 
   log "[INFO] 启动后台上传 Worker: $WORKER_SCRIPT"
   mkdir -p "$(dirname "$WORKER_LOG")"
-  nohup "$VENV_PY" "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
+  nohup "$VENV_PY" -u "$WORKER_SCRIPT" >> "$WORKER_LOG" 2>&1 &
   UPLOAD_WORKER_PID=$!
   log "[INFO] upload_worker.py 已在后台启动，PID: $UPLOAD_WORKER_PID"
   echo "UPLOAD_WORKER_PID=$UPLOAD_WORKER_PID"
@@ -115,7 +115,7 @@ if [ -f "$MERGE_WORKER_SCRIPT" ]; then
 
   log "[INFO] 启动后台 Merge Worker: $MERGE_WORKER_SCRIPT"
   mkdir -p "$(dirname "$MERGE_WORKER_LOG")"
-  nohup "$VENV_PY" "$MERGE_WORKER_SCRIPT" >> "$MERGE_WORKER_LOG" 2>&1 &
+  nohup "$VENV_PY" -u "$MERGE_WORKER_SCRIPT" >> "$MERGE_WORKER_LOG" 2>&1 &
   MERGE_WORKER_PID=$!
   log "[INFO] merge_worker.py 已在后台启动，PID: $MERGE_WORKER_PID"
   echo "MERGE_WORKER_PID=$MERGE_WORKER_PID"
@@ -152,7 +152,7 @@ if [ -f "$CHECKIN_SERVER_SCRIPT" ]; then
 
   log "[INFO] 启动后台 Checkin Server: $CHECKIN_SERVER_SCRIPT"
   mkdir -p "$(dirname "$CHECKIN_SERVER_LOG")"
-  nohup "$VENV_PY" "$CHECKIN_SERVER_SCRIPT" >> "$CHECKIN_SERVER_LOG" 2>&1 &
+  nohup "$VENV_PY" -u "$CHECKIN_SERVER_SCRIPT" >> "$CHECKIN_SERVER_LOG" 2>&1 &
   CHECKIN_SERVER_PID=$!
   log "[INFO] checkin_server.py 已在后台启动，PID: $CHECKIN_SERVER_PID"
   echo "CHECKIN_SERVER_PID=$CHECKIN_SERVER_PID"
