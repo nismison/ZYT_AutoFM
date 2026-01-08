@@ -161,22 +161,18 @@ else
 fi
 
 # ============================
-# 4. 启动 Gunicorn（强一致性）
+# 4. 启动 Gunicorn（后台 + 清理旧进程）
 # ============================
 
 log "[INFO] 清理旧的 gunicorn 进程..."
+# 匹配项目模块名，而不是配置文件名
+OLD_GUNICORN_PIDS=$(pgrep -f "gunicorn.*ZYT_AutoFM.*flask_server:app" || true)
 
-GUNICORN_PIDS=$(pgrep -f "/usr/local/bin/gunicorn" || true)
-
-if [ -n "$GUNICORN_PIDS" ]; then
-  log "[INFO] 发现旧 gunicorn 进程: $GUNICORN_PIDS，准备终止"
-
-  # 先优雅 kill
-  kill $GUNICORN_PIDS 2>/dev/null || true
-  sleep 3
-
-  # 再次检查
-  STILL_PIDS=$(pgrep -f "/usr/local/bin/gunicorn" || true)
+if [ -n "$OLD_GUNICORN_PIDS" ]; then
+  log "[INFO] 发现旧 gunicorn 进程: $OLD_GUNICORN_PIDS，准备终止"
+  kill $OLD_GUNICORN_PIDS 2>/dev/null || true
+  sleep 2
+  STILL_PIDS=$(pgrep -f "gunicorn.*ZYT_AutoFM.*flask_server:app" || true)
   if [ -n "$STILL_PIDS" ]; then
     log "[WARN] gunicorn 未完全退出，执行 kill -9: $STILL_PIDS"
     kill -9 $STILL_PIDS 2>/dev/null || true
@@ -186,21 +182,16 @@ else
   log "[INFO] 未发现运行中的 gunicorn"
 fi
 
-# 确认清干净
-if pgrep -f "/usr/local/bin/gunicorn" >/dev/null; then
-  log "[ERROR] gunicorn 进程仍存在，拒绝启动新实例"
-  exit 1
-fi
-
-log "[INFO] 启动新的 gunicorn 实例"
-
+log "[INFO] 启动新的 gunicorn 实例..."
+mkdir -p "$(dirname "$GUNICORN_LOG")"
 nohup "$GUNICORN_BIN" -c "$GUNICORN_CONF" "$APP_MODULE" >> "$GUNICORN_LOG" 2>&1 &
 GUNICORN_PID=$!
-
 sleep 3
 
+# 健康检查
 if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
-  log "[ERROR] gunicorn 启动失败，PID=$GUNICORN_PID"
+  log "[ERROR] gunicorn 启动失败，PID=$GUNICORN_PID, 查看日志: $GUNICORN_LOG"
+  echo "GUNICORN_PID=0"
   exit 1
 fi
 
