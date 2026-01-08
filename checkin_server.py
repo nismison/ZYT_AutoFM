@@ -198,7 +198,7 @@ def main():
     # day：07:50 / 20:01
     scheduler.add_job(
         run_for_banci,
-        trigger=CronTrigger(hour=7, minute=50),
+        trigger=CronTrigger(hour=7, minute=50, timezone=TZ),
         args=["day"],
         id="day_0750",
         replace_existing=True,
@@ -208,7 +208,7 @@ def main():
     )
     scheduler.add_job(
         run_for_banci,
-        trigger=CronTrigger(hour=20, minute=1),
+        trigger=CronTrigger(hour=20, minute=1, timezone=TZ),
         args=["day"],
         id="day_2001",
         replace_existing=True,
@@ -220,7 +220,7 @@ def main():
     # night：19:50 / 08:01
     scheduler.add_job(
         run_for_banci,
-        trigger=CronTrigger(hour=19, minute=50),
+        trigger=CronTrigger(hour=19, minute=50, timezone=TZ),
         args=["night"],
         id="night_1950",
         replace_existing=True,
@@ -230,7 +230,7 @@ def main():
     )
     scheduler.add_job(
         run_for_banci,
-        trigger=CronTrigger(hour=8, minute=1),
+        trigger=CronTrigger(hour=8, minute=1, timezone=TZ),
         args=["night"],
         id="night_0801",
         replace_existing=True,
@@ -240,6 +240,11 @@ def main():
     )
 
     print("scheduler started:", datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S"))
+    now = datetime.now(TZ)
+    for job in scheduler.get_jobs():
+        trigger = job.trigger
+        next_time = trigger.get_next_fire_time(None, now)
+        print(job.id, next_time, next_time.tzinfo)
     scheduler.start()
 
 
