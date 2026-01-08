@@ -20,7 +20,7 @@ REPO_PATH="/root/ZYT_AutoFM"
 UPLOAD_WORKER="$REPO_PATH/upload_worker.py"
 MERGE_WORKER="$REPO_PATH/merge_worker.py"
 CHECKIN_SERVER="$REPO_PATH/checkin_server.py"
-GUNICORN_BIN="/usr/local/bin/gunicorn"
+GUNICORN_BIN="/www/server/pyporject_evn/3820/bin/gunicorn"
 
 EXIT_CODE=0
 
