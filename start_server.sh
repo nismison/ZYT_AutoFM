@@ -29,6 +29,7 @@ WORKER_LOG="/root/ZYT_AutoFM/upload_worker.log"
 MERGE_WORKER_LOG="/root/ZYT_AutoFM/merge_worker.log"
 GUNICORN_LOG="/root/ZYT_AutoFM/gunicorn.log"
 CHECKIN_SERVER_LOG="/root/ZYT_AutoFM/checkin_server.log"
+REFRESH_TOKEN_SERVER_LOG="/root/ZYT_AutoFM/refresh_token_server.log"
 
 log "[INFO] 当前执行用户: $(whoami)"
 
@@ -158,6 +159,80 @@ if [ -f "$CHECKIN_SERVER_SCRIPT" ]; then
   echo "CHECKIN_SERVER_PID=$CHECKIN_SERVER_PID"
 else
   log "[WARNING] 未找到 $CHECKIN_SERVER_SCRIPT，跳过 Checkin Server 启动。"
+fi
+
+# ============================
+# 3.5 启动 checkin_server.py（后台）
+# ============================
+CHECKIN_SERVER_SCRIPT="$REPO_PATH/checkin_server.py"
+CHECKIN_SERVER_PID=""
+
+if [ -f "$CHECKIN_SERVER_SCRIPT" ]; then
+  log "[INFO] 检查 checkin_server.py 是否已在运行..."
+
+  CHECKIN_EXISTING_PIDS=$(pgrep -f "$CHECKIN_SERVER_SCRIPT" || true)
+
+  if [ -n "$CHECKIN_EXISTING_PIDS" ]; then
+    log "[INFO] 检测到运行中的 checkin_server.py，PIDs: $CHECKIN_EXISTING_PIDS，准备重启..."
+
+    kill $CHECKIN_EXISTING_PIDS 2>/dev/null || true
+    sleep 2
+
+    CHECKIN_STILL_PIDS=$(pgrep -f "$CHECKIN_SERVER_SCRIPT" || true)
+    if [ -n "$CHECKIN_STILL_PIDS" ]; then
+      log "[WARN] 进程未完全退出，执行 kill -9: $CHECKIN_STILL_PIDS"
+      kill -9 $CHECKIN_STILL_PIDS 2>/dev/null || true
+      sleep 1
+    fi
+  else
+    log "[INFO] 未发现运行中的 checkin_server.py，直接启动。"
+  fi
+
+  log "[INFO] 启动后台 Checkin Server: $CHECKIN_SERVER_SCRIPT"
+  mkdir -p "$(dirname "$CHECKIN_SERVER_LOG")"
+  nohup "$VENV_PY" -u "$CHECKIN_SERVER_SCRIPT" >> "$CHECKIN_SERVER_LOG" 2>&1 &
+  CHECKIN_SERVER_PID=$!
+  log "[INFO] checkin_server.py 已在后台启动，PID: $CHECKIN_SERVER_PID"
+  echo "CHECKIN_SERVER_PID=$CHECKIN_SERVER_PID"
+else
+  log "[WARNING] 未找到 $CHECKIN_SERVER_SCRIPT，跳过 Checkin Server 启动。"
+fi
+
+# ============================
+# 3.6 启动 refresh_token_server.py（后台）
+# ============================
+REFRESH_TOKEN_SERVER_SCRIPT="$REPO_PATH/refresh_token_server.py"
+REFRESH_TOKEN_SERVER_PID=""
+
+if [ -f "$REFRESH_TOKEN_SERVER_SCRIPT" ]; then
+  log "[INFO] 检查 refresh_token_server.py 是否已在运行..."
+
+  REFRESH_EXISTING_PIDS=$(pgrep -f "$REFRESH_TOKEN_SERVER_SCRIPT" || true)
+
+  if [ -n "$REFRESH_EXISTING_PIDS" ]; then
+    log "[INFO] 检测到运行中的 refresh_token_server.py，PIDs: $REFRESH_EXISTING_PIDS，准备重启..."
+
+    kill $REFRESH_EXISTING_PIDS 2>/dev/null || true
+    sleep 2
+
+    REFRESH_STILL_PIDS=$(pgrep -f "$REFRESH_TOKEN_SERVER_SCRIPT" || true)
+    if [ -n "$REFRESH_STILL_PIDS" ]; then
+      log "[WARN] 进程未完全退出，执行 kill -9: $REFRESH_STILL_PIDS"
+      kill -9 $REFRESH_STILL_PIDS 2>/dev/null || true
+      sleep 1
+    fi
+  else
+    log "[INFO] 未发现运行中的 refresh_token_server.py，直接启动。"
+  fi
+
+  log "[INFO] 启动后台 Refresh Token Server: $REFRESH_TOKEN_SERVER_SCRIPT"
+  mkdir -p "$(dirname "$REFRESH_TOKEN_SERVER_LOG")"
+  nohup "$VENV_PY" -u "$REFRESH_TOKEN_SERVER_SCRIPT" >> "$REFRESH_TOKEN_SERVER_LOG" 2>&1 &
+  REFRESH_TOKEN_SERVER_PID=$!
+  log "[INFO] refresh_token_server.py 已在后台启动，PID: $REFRESH_TOKEN_SERVER_PID"
+  echo "REFRESH_TOKEN_SERVER_PID=$REFRESH_TOKEN_SERVER_PID"
+else
+  log "[WARNING] 未找到 $REFRESH_TOKEN_SERVER_SCRIPT，跳过 Refresh Token Server 启动。"
 fi
 
 # ============================
