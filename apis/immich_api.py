@@ -1,6 +1,9 @@
+import os
 import time
+from datetime import datetime
 from io import BytesIO
-from typing import List, Optional
+from typing import List
+from typing import Optional
 
 import requests
 from PIL import Image, UnidentifiedImageError
@@ -9,8 +12,8 @@ from config import (
     IMMICH_API_KEY,
     IMMICH_URL,
     IMMICH_LIBRARY_ID,
-    IMMICH_TARGET_ALBUM_ID,
 )
+from utils.immich_utils import generate_device_asset_id
 from utils.logger import log_line
 
 
@@ -176,4 +179,84 @@ class IMMICHApi:
             )
             return False
 
+        return True
+
+    def post_asset(
+            self,
+            file_path: str,
+    ):
+        if not os.path.isfile(file_path):
+            log_line(f"[ERROR] 文件不存在: {file_path}")
+            return False
+
+        url = f"{IMMICH_URL}/assets"
+        stats = os.stat(file_path)
+
+        data = {
+            'deviceAssetId': f'{file_path}-{stats.st_mtime}',
+            'deviceId': 'python',
+            'fileCreatedAt': datetime.fromtimestamp(stats.st_mtime),
+            'fileModifiedAt': datetime.fromtimestamp(stats.st_mtime),
+        }
+
+        try:
+            with open(file_path, "rb") as f:
+                files = {
+                    "assetData": f,
+                }
+
+                resp = requests.post(
+                    url,
+                    headers=self.headers,
+                    data=data,
+                    files=files,
+                    timeout=120,
+                )
+
+                print(resp.json())
+                return resp.json()
+        except Exception as e:
+            log_line(f"[ERROR] post_asset 请求失败: {e}")
+            return False
+
+    def upload_file_to_album(
+            self,
+            *,
+            file_path: str,
+            album_id: str,
+    ) -> bool:
+        """
+        完整流程：
+        1. hash 文件内容生成 deviceAssetId
+        2. POST /assets（若已存在自动跳过）
+        3. PUT /albums/{id}/assets
+        """
+        if not os.path.isfile(file_path):
+            log_line(f"[ERROR] 文件不存在: {file_path}")
+            return False
+
+        device_asset_id = generate_device_asset_id(file_path)
+
+        log_line(f"[INFO] 上传文件: {file_path}")
+        log_line(f"[INFO] deviceAssetId: {device_asset_id}")
+
+        ok = self.post_asset(file_path=file_path)
+
+        if not ok:
+            return False
+
+        # Immich 中 asset_id == deviceAssetId（逻辑上）
+        asset_id = ok.get("id")
+
+        if not asset_id:
+            log_line(f"[ERROR] 获取资产 ID 失败: {file_path}")
+            return False
+
+        if not self.put_assets_to_album(asset_id, album_id):
+            log_line(
+                f"[ERROR] 资产加入相册失败: asset={asset_id}, album={album_id}"
+            )
+            return False
+
+        log_line(f"[INFO] 上传并加入相册成功: {file_path}")
         return True

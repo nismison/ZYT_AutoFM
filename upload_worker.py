@@ -75,41 +75,45 @@ def task_worker():
             host_path = task.tmp_path
             log_line(f"[INFO] 文件已在 External Library: {host_path}")
 
-            # Immich 容器内部看到的 originalPath
-            if task.external_rel_path:
-                immich_original_path = os.path.join(
-                    IMMICH_EXTERNAL_CONTAINER_ROOT,
-                    task.external_rel_path,
-                )
-            else:
-                # 兜底：如果旧任务没有 external_rel_path，用文件名拼
-                immich_original_path = os.path.join(
-                    IMMICH_EXTERNAL_CONTAINER_ROOT,
-                    os.path.basename(host_path),
-                )
-
-            # Step 2: 触发 External Library 扫描
-            if immich_api.scan_external_library():
-                log_line("[INFO] External Library 扫描触发成功")
-            else:
-                raise RuntimeError("触发 Immich 扫描 External Library 失败")
-
-            # Step 3: 轮询 originalPath 等待 Immich 建立 asset
-            asset_id = immich_api.wait_asset_by_original_path(
-                immich_original_path,
-                timeout=60,
-                interval=2.0,
-            )
-            log_line(f"[INFO] 扫描资产 originalPath={immich_original_path} → asset_id={asset_id}")
-
-            if not asset_id:
-                raise RuntimeError("在 Immich 中未找到对应资产（轮询超时）")
-
-            # Step 4: 添加到相册
-            ok = immich_api.put_assets_to_album(asset_id, IMMICH_TARGET_ALBUM_ID)
+            ok = immich_api.upload_file_to_album(file_path=host_path, album_id=IMMICH_TARGET_ALBUM_ID)
             if not ok:
                 raise RuntimeError("添加资源到相册失败")
-            log_line(f"[INFO] 已添加到相册: album_id={IMMICH_TARGET_ALBUM_ID}, asset_id={asset_id}")
+
+            # # Immich 容器内部看到的 originalPath
+            # if task.external_rel_path:
+            #     immich_original_path = os.path.join(
+            #         IMMICH_EXTERNAL_CONTAINER_ROOT,
+            #         task.external_rel_path,
+            #     )
+            # else:
+            #     # 兜底：如果旧任务没有 external_rel_path，用文件名拼
+            #     immich_original_path = os.path.join(
+            #         IMMICH_EXTERNAL_CONTAINER_ROOT,
+            #         os.path.basename(host_path),
+            #     )
+            #
+            # # Step 2: 触发 External Library 扫描
+            # if immich_api.scan_external_library():
+            #     log_line("[INFO] External Library 扫描触发成功")
+            # else:
+            #     raise RuntimeError("触发 Immich 扫描 External Library 失败")
+            #
+            # # Step 3: 轮询 originalPath 等待 Immich 建立 asset
+            # asset_id = immich_api.wait_asset_by_original_path(
+            #     immich_original_path,
+            #     timeout=60,
+            #     interval=2.0,
+            # )
+            # log_line(f"[INFO] 扫描资产 originalPath={immich_original_path} → asset_id={asset_id}")
+            #
+            # if not asset_id:
+            #     raise RuntimeError("在 Immich 中未找到对应资产（轮询超时）")
+            #
+            # # Step 4: 添加到相册
+            # ok = immich_api.put_assets_to_album(asset_id, IMMICH_TARGET_ALBUM_ID)
+            # if not ok:
+            #     raise RuntimeError("添加资源到相册失败")
+            # log_line(f"[INFO] 已添加到相册: album_id={IMMICH_TARGET_ALBUM_ID}, asset_id={asset_id}")
 
             # Step 5: 写 UploadRecord
             try:
@@ -138,7 +142,7 @@ def task_worker():
                 .execute()
             )
 
-            log_line(f"[INFO] 任务完成: id={task.id}, asset_id={asset_id}")
+            log_line(f"[INFO] 任务完成: id={task.id}")
             continue
 
         except Exception as e:
