@@ -1,5 +1,5 @@
 {
-  "silent": 1,
+  "silent": 0,
   "force": 1,
   "net_check": 0,
   "note": "修复保存图片偶尔会失败的错误"

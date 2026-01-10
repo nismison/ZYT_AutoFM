@@ -26,7 +26,7 @@ cd "$REPO_PATH" || {
 
 log "[INFO] 开始同步最新代码..."
 
-GIT_CMD="git pull --ff-only"
+GIT_CMD="git checkout . && git pull --ff-only"
 
 # 防止 git 卡死；失败直接终止部署
 if ! timeout 30s bash -lc "$GIT_CMD"; then
