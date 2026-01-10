@@ -1,10 +1,9 @@
 import os
-import shutil
 import time
 from datetime import datetime
 
 from apis.immich_api import IMMICHApi
-from config import IMMICH_TARGET_ALBUM_ID, IMMICH_EXTERNAL_CONTAINER_ROOT, IMMICH_EXTERNAL_HOST_ROOT, TZ
+from config import IMMICH_TARGET_ALBUM_ID, TZ
 from db import UploadTask, UploadRecord
 from utils.logger import log_line
 
@@ -71,11 +70,9 @@ def task_worker():
                 )
                 continue
 
-            # External Library 宿主机路径就是 tmp_path，无需移动
-            host_path = task.tmp_path
-            log_line(f"[INFO] 文件已在 External Library: {host_path}")
+            log_line(f"[INFO] 文件已在 External Library: {task.tmp_path}")
 
-            ok = immich_api.upload_file_to_album(file_path=host_path, album_id=IMMICH_TARGET_ALBUM_ID)
+            ok = immich_api.upload_file_to_album(file_path=task.tmp_path, album_id=IMMICH_TARGET_ALBUM_ID)
             if not ok:
                 raise RuntimeError("添加资源到相册失败")
 
@@ -119,7 +116,7 @@ def task_worker():
             try:
                 UploadRecord.create(
                     oss_url="immich-external",
-                    file_size=os.path.getsize(host_path),
+                    file_size=os.path.getsize(task.tmp_path),
                     upload_time=datetime.now(TZ),
                     original_filename=task.original_filename,
                     width=0,
@@ -143,6 +140,12 @@ def task_worker():
             )
 
             log_line(f"[INFO] 任务完成: id={task.id}")
+
+            try:
+                os.remove(task.tmp_path)
+            except Exception as remove_err:
+                log_line(f"[ERROR] 删除临时文件出错: {remove_err}")
+
             continue
 
         except Exception as e:
