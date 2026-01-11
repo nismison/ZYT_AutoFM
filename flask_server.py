@@ -206,7 +206,8 @@ def create_app() -> Flask:
     @app.route("/api/test", methods=["GET"])
     def test():
         return jsonify({
-            "success": True
+            "success": True,
+            "data": {}
         })
 
     # 注册蓝图
