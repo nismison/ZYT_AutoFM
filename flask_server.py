@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import parse_qs
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config import db, TZ
@@ -202,6 +202,12 @@ def create_app() -> Flask:
     @app.teardown_request
     def _db_close(_):
         close_database_connection()
+
+    @app.route("/api/test", methods=["GET"])
+    def test():
+        return jsonify({
+            "success": True
+        })
 
     # 注册蓝图
     register_blueprints(app)
