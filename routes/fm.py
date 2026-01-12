@@ -102,6 +102,8 @@ def users_fm():
                 "phone": u.phone or "",
                 "device_model": u.device_model or "",
                 "device_id": u.device_id or "",
+                "expired": not u.token_expires or not u.baichuan_token or u.token_expires < round(
+                    datetime.now(TZ).timestamp()) or u.baichuan_expires < round(datetime.now(TZ).timestamp()),
             }
             for u in users
         ]
