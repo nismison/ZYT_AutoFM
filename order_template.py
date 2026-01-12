@@ -652,3 +652,50 @@ def order_template_WQZJ(order_id, marked_image1, marked_image2, marked_image3):
             "beginDealTime": None
         }
     }
+
+
+# 空置房巡查月巡检 workResult
+def order_template_KZF(order_id, marked_image1, marked_image2, marked_image3, marked_image4):
+    return {
+        "orderId": order_id,
+        "formData": {
+            "stepResult": [
+                {
+                    "stepNo": "1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image1
+                },
+                {
+                    "stepNo": "2",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image2
+                },
+                {
+                    "stepNo": "3",
+                    "stepType": "ONECHOOSE",
+                    "stepResult": "正常"
+                },
+                {
+                    "stepNo": "3.1",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image3
+                },
+                {
+                    "stepNo": "4",
+                    "stepType": "ESTIMATE",
+                    "stepResult": "0"
+                },
+                {
+                    "stepNo": "5",
+                    "stepType": "PHOTOGRAPH",
+                    "stepResult": marked_image4
+                },
+                {
+                    "stepNo": "6",
+                    "stepType": "DESCRIBE",
+                    "stepResult": "无"
+                }
+            ],
+            "beginDealTime": None
+        }
+    }

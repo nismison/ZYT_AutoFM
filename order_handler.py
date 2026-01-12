@@ -122,6 +122,11 @@ ORDER_RULES = {
         "func": order_template_WQZJ,
         "image_count": 3,
     },
+    "空置房巡查月巡检": {
+        "template": "KZF",
+        "func": order_template_KZF,
+        "image_count": 4,
+    },
 }
 
 
