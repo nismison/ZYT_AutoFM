@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 import requests
@@ -6,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from apis.fm_api import FMApi
 from config import TZ
-from db import UserInfo
+from db import UserInfo, UserTemplatePic
 from order_handler import OrderHandler
 from oss_client import OSSClient
 from utils.crypter import generate_random_coordinates
@@ -373,3 +374,244 @@ def checkin_fm():
             "success": False,
             "error": f"{str(e)}",
         }), 500
+
+
+@bp.route('/api/fm/upload_template', methods=['POST'])
+def upload_template_pics():
+    """
+    POST 接口：上传模板图片
+    参数 (form-data):
+        user_number: 用户编号 (必填)
+        category: 模板一级分类 (必填)
+        sub_category: 模板二级分类 (可选, 默认为空)
+        sequence: 序列号 (必填)
+        files: 文件流 (支持多文件上传)
+    """
+    try:
+        # 1. 获取基础参数
+        user_number = request.form.get('user_number')
+        category = request.form.get('category')
+        sub_category = request.form.get('sub_category', "")
+        sequence = request.form.get('sequence')
+
+        # 获取上传的文件列表
+        uploaded_files = request.files.getlist('files')
+
+        # 2. 基础参数校验
+        if not all([user_number, category, sequence]):
+            return jsonify({
+                "success": False,
+                "error": "Missing required parameters: user_number, category, or sequence",
+                "code": "PARAM_MISSING"
+            })
+
+        if not uploaded_files:
+            return jsonify({
+                "success": False,
+                "error": "No files uploaded",
+                "code": "NO_FILES"
+            })
+
+        # 3. 初始化上传客户端
+        # 注意：在实际工程中，fm 和 oss 实例建议作为全局单例或从连接池获取
+        fm = FMApi(user_number=user_number)
+        oss = OSSClient(fm.session, fm.token)
+
+        success_records = []
+
+        # 4. 循环处理每一个文件
+        for file in uploaded_files:
+            if file.filename == '':
+                continue
+
+            # A. 保存临时文件以便 OSSClient 读取（如果你的 OSSClient.upload 支持流，可直接传流）
+            # 这里演示先存后传，上传完即刻删除
+            temp_path = os.path.join("/tmp", file.filename)
+            file.save(temp_path)
+
+            try:
+                # B. 执行上传
+                cos_url = oss.upload(temp_path)
+
+                # C. 写入数据库记录
+                # 因为你要求同一个路径下可以存多张，所以这里直接 create
+                new_pic = UserTemplatePic.create(
+                    user_number=user_number,
+                    category=category,
+                    sub_category=sub_category,
+                    sequence=sequence,
+                    cos_url=cos_url
+                )
+
+                success_records.append({
+                    "id": new_pic.id,
+                    "url": cos_url
+                })
+
+            finally:
+                # D. 清理临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+        # 5. 返回结果
+        return jsonify({
+            "success": True,
+            "data": {"uploaded_count": len(success_records), "records": success_records},
+            "code": "UPLOAD_SUCCESS"
+        })
+
+    except Exception as e:
+        # 记录日志等
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "code": "INTERNAL_SERVER_ERROR"
+        })
+
+
+@bp.route('/api/fm/get_template_info', methods=['POST'])
+def get_template_info():
+    """
+    动态查询接口：根据参数深度返回 子类列表 或 文件详情列表(含id和url)
+    """
+    params = request.get_json() if request.is_json else request.form
+
+    user_number = params.get('user_number')
+    category = params.get('category')
+    sub_category = params.get('sub_category')
+    sequence = params.get('sequence')
+
+    if not user_number:
+        return jsonify({
+            "success": False,
+            "data": {},
+            "error": "user_number is required",
+            "code": "PARAM_MISSING"
+        })
+
+    try:
+        query_filter = [UserTemplatePic.user_number == user_number]
+
+        # --- 场景 1: 只传了 user_number -> 返回所有一级分类列表 ---
+        if not category:
+            categories = UserTemplatePic.select(UserTemplatePic.category).where(*query_filter).distinct()
+            return jsonify({
+                "success": True,
+                "data": {"categories": [c.category for c in categories]},
+                "error": "", "code": "SUCCESS"
+            })
+
+        # --- 场景 2: 传了 category，但没传 sub_category ---
+        query_filter.append(UserTemplatePic.category == category)
+        if not sub_category:
+            # 检查是否有非空的二级分类
+            sub_cats = UserTemplatePic.select(UserTemplatePic.sub_category).where(
+                *query_filter,
+                UserTemplatePic.sub_category != ""
+            ).distinct()
+
+            sub_cat_list = [sc.sub_category for sc in sub_cats]
+            if sub_cat_list:
+                return jsonify({
+                    "success": True,
+                    "data": {"sub_categories": sub_cat_list},
+                    "error": "", "code": "SUCCESS"
+                })
+
+            # 如果没有二级分类，且没传 sequence，返回序号列表
+            if not sequence:
+                sequences = UserTemplatePic.select(UserTemplatePic.sequence).where(*query_filter).distinct()
+                return jsonify({
+                    "success": True,
+                    "data": {"sequences": [s.sequence for s in sequences]},
+                    "error": "", "code": "SUCCESS"
+                })
+
+        # --- 场景 3: 传了 sub_category，但没传 sequence ---
+        if sub_category:
+            query_filter.append(UserTemplatePic.sub_category == sub_category)
+            if not sequence:
+                sequences = UserTemplatePic.select(UserTemplatePic.sequence).where(*query_filter).distinct()
+                return jsonify({
+                    "success": True,
+                    "data": {"sequences": [s.sequence for s in sequences]},
+                    "error": "", "code": "SUCCESS"
+                })
+
+        # --- 场景 4: 路径已锁定到 sequence -> 返回文件对象列表 (含 ID 和 URL) ---
+        if sequence:
+            query_filter.append(UserTemplatePic.sequence == sequence)
+            # 同时查询 id 和 cos_url
+            files = UserTemplatePic.select(UserTemplatePic.id, UserTemplatePic.cos_url).where(*query_filter)
+
+            # 构造包含 ID 的对象列表
+            file_list = [
+                {"id": f.id, "url": f.cos_url}
+                for f in files
+            ]
+
+            return jsonify({
+                "success": True,
+                "data": {"files": file_list},
+                "error": "",
+                "code": "SUCCESS"
+            })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "data": {},
+            "error": str(e),
+            "code": "SERVER_ERROR"
+        })
+
+
+@bp.route('/api/fm/delete_template_pic', methods=['POST'])
+def delete_template_pic():
+    """
+    删除接口：根据数据库 ID 删除记录
+    参数 (JSON 或 Form):
+        id: 数据库记录的主键 ID (必填)
+    """
+    # 获取参数
+    params = request.get_json() if request.is_json else request.form
+    pic_id = params.get('id')
+
+    # 1. 参数校验
+    if not pic_id:
+        return jsonify({
+            "success": False,
+            "data": {},
+            "error": "Parameter 'id' is required",
+            "code": "PARAM_MISSING"
+        })
+
+    try:
+        # 2. 执行删除操作
+        # .execute() 会返回受影响的行数
+        query = UserTemplatePic.delete().where(UserTemplatePic.id == pic_id)
+        rows_deleted = query.execute()
+
+        if rows_deleted > 0:
+            return jsonify({
+                "success": True,
+                "data": {"deleted_id": pic_id},
+                "error": "",
+                "code": "SUCCESS"
+            })
+        else:
+            # 如果 ID 不存在，返回成功但提示未找到记录（或者也可以根据业务定义为失败）
+            return jsonify({
+                "success": False,
+                "data": {},
+                "error": "Record not found",
+                "code": "NOT_FOUND"
+            })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "data": {},
+            "error": str(e),
+            "code": "SERVER_ERROR"
+        })
