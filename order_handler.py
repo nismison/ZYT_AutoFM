@@ -9,6 +9,7 @@ from typing import Optional, Literal, List
 
 from config import TZ
 from order_template import *
+from oss_client import get_random_template_url_from_db, download_temp_image
 from tasks.watermark_task import add_watermark_to_image
 from utils.custom_raise import *
 from utils.notification import Notify
@@ -311,37 +312,68 @@ class OrderHandler:
 
         # 7️⃣ 生成水印图片（唯一文件名），每张使用各自的 base_date/base_time
         image_paths: List[str] = []
-        for i in range(image_count):
-            tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
-            tmp_path = os.path.join(self.tmp_dir, tmp_filename)
+        downloaded_templates: List[str] = []  # 记录下载到本地的模板路径，用于后续清理
 
-            template_path = f"{user_number}/{rule['template']}/"
-            if title == "单元楼栋月巡检":
-                # 如果订单包含位置信息，则使用位置子目录
-                matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
-                if matches:
-                    template_path = f"{user_number}/{rule['template']}/{matches[0]}"
+        try:
+            for i in range(image_count):
+                # 1. 确定分类和子分类逻辑
+                category = rule['template']
+                sub_category = ""
+                sequence = str(i + 1)
 
-            original_image_path = get_random_template_file(template_path, str(i + 1))
-            if not original_image_path:
-                msg = f"未找到模板图片: {template_path}/{i + 1}"
-                logger.error(msg)
-                raise ImageUploadError(msg)
+                if title == "单元楼栋月巡检":
+                    matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
+                    if matches:
+                        sub_category = matches[0]
 
-            # 使用为当前索引预先计算好的水印时间
-            wm_dt = watermark_times[i]
-            base_date = wm_dt.strftime("%Y-%m-%d")
-            base_time = wm_dt.strftime("%H:%M")
+                # 2. 从数据库获取随机 URL
+                cos_url = get_random_template_url_from_db(user_number, category, sub_category, sequence)
 
-            add_watermark_to_image(
-                original_image_path=original_image_path,
-                base_date=base_date,
-                base_time=base_time,
-                name=user,
-                user_number=user_number,
-                output_path=tmp_path,
-            )
-            image_paths.append(tmp_path)
+                # 3. 下载模板到本地临时目录
+                if cos_url:
+                    original_image_path = download_temp_image(cos_url, self.tmp_dir)
+                else:
+                    # Fallback 逻辑：如果数据库没有，使用本地的 black.jpg
+                    original_image_path = "black.jpg"
+                    # 注意：如果是 black.jpg，不需要放进待删除列表，除非它是动态生成的
+
+                if not original_image_path or not os.path.exists(original_image_path):
+                    msg = f"无法获取模板图片: {category}/{sub_category}/{sequence}"
+                    logger.error(msg)
+                    raise ImageUploadError(msg)
+
+                # 记录下载的路径，任务结束后删除
+                if original_image_path != "black.jpg":
+                    downloaded_templates.append(original_image_path)
+
+                # 使用为当前索引预先计算好的水印时间
+                wm_dt = watermark_times[i]
+                base_date = wm_dt.strftime("%Y-%m-%d")
+                base_time = wm_dt.strftime("%H:%M")
+
+                # 输出临时文件名
+                tmp_filename = f"wm_{uuid.uuid4().hex}.jpg"
+                tmp_path = os.path.join(self.tmp_dir, tmp_filename)
+
+                # 生成水印图片
+                add_watermark_to_image(
+                    original_image_path=original_image_path,
+                    base_date=base_date,
+                    base_time=base_time,
+                    name=user,
+                    user_number=user_number,
+                    output_path=tmp_path,
+                )
+                image_paths.append(tmp_path)
+        finally:
+            # --- 最终统一清理 ---
+            # 1. 清理下载的模板原图
+            for path in downloaded_templates:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception as e:
+                    logger.error(f"清理模板缓存失败: {path}, {e}")
 
         # 8️⃣ 上传图片（任意一张失败直接抛错）
         uploaded_urls: List[str] = []

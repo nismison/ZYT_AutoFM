@@ -4,13 +4,52 @@ import hmac
 import json
 import logging
 import os
+import random
 import time
 import uuid
 
+import requests
+
 from config import FM_BASE_URL
-from db import UserInfo
+from db import UserInfo, UserTemplatePic
 
 logger = logging.getLogger(__name__)
+
+
+def download_temp_image(url, tmp_dir):
+    """下载图片并保存到临时目录，返回本地路径"""
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            # 使用 uuid 生成临时文件名，防止并发冲突
+            tmp_filename = f"temp_tpl_{uuid.uuid4().hex}.jpg"
+            local_path = os.path.join(tmp_dir, tmp_filename)
+            with open(local_path, 'wb') as f:
+                f.write(response.content)
+            return local_path
+    except Exception as e:
+        logger.error(f"下载模板图片失败: {url}, error: {e}")
+    return None
+
+
+def get_random_template_url_from_db(user_number, category, sub_category="", sequence="1"):
+    """从数据库随机获取一个 COS URL"""
+    try:
+        # 按照之前的 Peewee 模型查询
+        query = UserTemplatePic.select(UserTemplatePic.cos_url).where(
+            UserTemplatePic.user_number == user_number,
+            UserTemplatePic.category == category,
+            UserTemplatePic.sub_category == (sub_category or ""),
+            UserTemplatePic.sequence == str(sequence)
+        )
+
+        urls = [p.cos_url for p in query]
+        if urls:
+            return random.choice(urls)
+    except Exception as e:
+        logger.error(f"数据库查询模板失败: {e}")
+
+    return None  # 如果没找到，由上层逻辑处理 fallback
 
 
 class OSSClient:
