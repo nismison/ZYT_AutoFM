@@ -67,8 +67,8 @@ class File(BaseModel):
     # worker 合并之后写入（比如 "/immich-external/<cos_key>"）
     url = CharField(max_length=1024, null=True)
 
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(default=datetime.now)
+    created_at = DateTimeField(default=datetime.now(TZ))
+    updated_at = DateTimeField(default=datetime.now(TZ))
 
     def save(self, *args, **kwargs):
         self.updated_at = datetime.now(TZ)
@@ -107,8 +107,8 @@ class UploadSession(BaseModel):
     # 具体取值由 config.SESSION_STATUS_* 常量定义
     status = CharField(max_length=32, index=True)
 
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(default=datetime.now)
+    created_at = DateTimeField(default=datetime.now(TZ))
+    updated_at = DateTimeField(default=datetime.now(TZ))
 
     def save(self, *args, **kwargs):
         self.updated_at = datetime.now(TZ)
@@ -140,7 +140,7 @@ class UploadPart(BaseModel):
     etag = CharField(max_length=64)
     status = CharField(max_length=32, index=True)
 
-    created_at = DateTimeField(default=datetime.now)
+    created_at = DateTimeField(default=datetime.now(TZ))
 
     class Meta:
         table_name = "upload_part"
@@ -159,7 +159,7 @@ class UploadRecord(BaseModel):
     oss_url = CharField(max_length=500)
     file_size = IntegerField()
     device_model = CharField(max_length=100, null=True)
-    upload_time = DateTimeField(default=datetime.now)
+    upload_time = DateTimeField(default=datetime.now(TZ))
     original_filename = CharField(max_length=255, null=True)
     favorite = BooleanField(default=False)
     etag = CharField(max_length=32, null=True)
@@ -194,8 +194,8 @@ class UploadTask(BaseModel):
     # 状态：pending / processing / done / failed
 
     retry = IntegerField(default=0)  # 重试次数
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(default=datetime.now)
+    created_at = DateTimeField(default=datetime.now(TZ))
+    updated_at = DateTimeField(default=datetime.now(TZ))
 
     class Meta:
         table_name = "upload_task"
@@ -207,9 +207,6 @@ class UploadTask(BaseModel):
 class UserInfo(BaseModel):
     """
     用户信息表
-
-    - name: 用户姓名
-    - user_number: 7 位数字的用户编号（唯一）
     """
     id = AutoField()
     name = CharField(max_length=100)
@@ -227,6 +224,33 @@ class UserInfo(BaseModel):
         table_name = "user_info"
         indexes = (
             (("user_number",), True),  # user_number 唯一索引
+        )
+
+
+class UserTemplatePic(BaseModel):
+    """
+    用户模板图片表 (精简工程化版本)
+    支持 User -> Category -> SubCategory -> Sequence 结构下的多图存储
+    """
+    id = AutoField()
+
+    # 业务查询核心字段
+    user_number = CharField(max_length=20, index=True)
+    category = CharField(max_length=50)  # 如: 4L2R, DYL
+    sub_category = CharField(max_length=50, default="")  # 如: A1, A2; 无子类则为空
+    sequence = CharField(max_length=20)  # 如: 1, 2, 3
+
+    # 资源链接
+    cos_url = CharField(max_length=1024)
+
+    # 审计字段
+    created_at = DateTimeField(default=datetime.now(TZ))
+
+    class Meta:
+        table_name = "user_template_pics"
+        indexes = (
+            # 复合索引，极大提升“按逻辑路径筛选”的查询速度
+            (('user_number', 'category', 'sub_category', 'sequence'), False),
         )
 
 
