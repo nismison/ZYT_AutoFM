@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request
 from apis.fm_api import FMApi
 from config import TZ
 from db import UserInfo, UserTemplatePic
-from order_handler import OrderHandler
+from order_handler import OrderHandler, ORDER_RULES
 from oss_client import OSSClient
 from utils.crypter import generate_random_coordinates
 from utils.custom_raise import *
@@ -490,6 +490,8 @@ def get_template_info():
         })
 
     try:
+        template_alias = {v["template"]: k for k, v in ORDER_RULES.items()}
+
         query_filter = [UserTemplatePic.user_number == user_number]
 
         # --- 场景 1: 只传了 user_number -> 返回所有一级分类列表 ---
@@ -497,7 +499,11 @@ def get_template_info():
             categories = UserTemplatePic.select(UserTemplatePic.category).where(*query_filter).distinct()
             return jsonify({
                 "success": True,
-                "data": {"categories": [c.category for c in categories]},
+                "data": {
+                    "categories": [{
+                        "code": c.category,
+                        "alias": template_alias[c.category]
+                    } for c in categories]},
                 "error": "", "code": "SUCCESS"
             })
 
