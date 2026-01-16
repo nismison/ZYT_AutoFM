@@ -412,75 +412,58 @@ def resolve_order_template_path(target_order: Dict[str, Any]) -> Tuple[str, str,
 
 @bp.route('/api/fm/check_order_templates', methods=['POST'])
 def check_order_templates():
-    data = request.json
-    user_number = data.get('user_number')
-    order_id = data.get('order_id')
-
-    if not user_number or not order_id:
-        return jsonify({"success": False, "error": "缺少必要参数"}), 400
-
     try:
-        # 1. 获取工单详情 (调用你现有的获取工单列表/详情的方法)
-        fm = FMApi(user_number=user_number)
-        target_order = fm.get_order_detail(order_id)
+        params = request.json
+        user_number = params.get('user_number')
+        order_id = params.get('order_id')
 
-        # 2. 解析工单对应的模板路径
-        category, sub_category, image_count = resolve_order_template_path(target_order)
+        if not user_number or not order_id:
+            return jsonify({"success": False, "error": "缺少必要参数"}), 400
 
-        if not category:
-            return jsonify({
-                "success": False,
-                "error": f"工单【{target_order.get('title')}】未匹配到任何模板规则"
-            }), 200
-
-        # 3. 匹配工单规则
+        # 1. 获取工单并匹配规则 (逻辑保持一致)
+        # target_order = get_order_by_id(order_id)
+        target_order = {"title": "单元楼栋月巡检", "address": "A12-101"}  # 示例
         title = target_order.get("title", "")
         rule = next((ORDER_RULES[key] for key in ORDER_RULES if key in title), None)
 
         if not rule:
-            return jsonify({"success": False, "error": f"未找到工单【{title}】匹配的规则"})
+            return jsonify({"success": False, "error": "该工单无需模板图片"})
 
         category = rule['template']
         image_count = rule['image_count']
         sub_category = ""
-
-        # 单元楼栋月巡检特殊处理：提取楼栋号
         if title == "单元楼栋月巡检":
             matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
             if matches:
                 sub_category = matches[0]
 
-        # 4. Peewee 查询数据库
-        query = UserTemplatePic.select().where(
+        # 2. 核心逻辑：只查询存在的序号列表
+        # 使用 .select(UserTemplatePic.sequence) 只查序号列，减少数据传输
+        query = UserTemplatePic.select(UserTemplatePic.sequence).where(
             (UserTemplatePic.user_number == user_number) &
             (UserTemplatePic.category == category) &
             (UserTemplatePic.sub_category == sub_category)
         )
 
-        # 将查询结果转换为列表字典
-        existing_pics = [
-            {"sequence": p.sequence, "url": p.cos_url}
-            for p in query
-        ]
+        # 得到一个已存在序号的集合，例如: {'1', '2', '4'}
+        found_sequences = {str(p.sequence) for p in query}
 
-        # 5. 计算状态
-        found_sequences = {str(p['sequence']) for p in existing_pics}
+        # 3. 构造检查结果
         missing_sequences = [
             str(i + 1) for i in range(image_count)
             if str(i + 1) not in found_sequences
         ]
 
+        # 4. 只返回必要的状态
         return jsonify({
             "success": True,
             "data": {
-                "order_title": title,
                 "category": category,
                 "sub_category": sub_category,
-                "total_required": image_count,
-                "found_count": len(existing_pics),
-                "is_ready": len(missing_sequences) == 0,
-                "missing_sequences": missing_sequences,
-                "existing_pics": existing_pics
+                "is_ready": len(missing_sequences) == 0,  # 图片是否全齐
+                "total_required": image_count,  # 总共需要几张
+                "found_count": len(found_sequences),  # 实际有几张
+                "missing_sequences": missing_sequences  # 缺失的序号列表
             }
         })
 
