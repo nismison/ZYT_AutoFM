@@ -421,8 +421,8 @@ def check_order_templates():
             return jsonify({"success": False, "error": "缺少必要参数"}), 400
 
         # 1. 获取工单并匹配规则 (逻辑保持一致)
-        # target_order = get_order_by_id(order_id)
-        target_order = {"title": "单元楼栋月巡检", "address": "A12-101"}  # 示例
+        fm = FMApi(user_number=user_number)
+        target_order = fm.get_order_detail(order_id)
         title = target_order.get("title", "")
         rule = next((ORDER_RULES[key] for key in ORDER_RULES if key in title), None)
 
