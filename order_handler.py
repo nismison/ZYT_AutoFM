@@ -7,59 +7,13 @@ import tempfile
 import uuid
 from typing import Optional, Literal, List
 
-from config import TZ
 from order_template import *
 from oss_client import get_random_template_url_from_db, download_temp_image
 from tasks.watermark_task import add_watermark_to_image
 from utils.custom_raise import *
 from utils.notification import Notify
-from utils.storage import get_random_template_file
 
 logger = logging.getLogger(__name__)
-
-
-def generate_default_times(base_hour, ranges):
-    """通用时间生成器"""
-    return [(base_hour, r) for r in ranges]
-
-
-def remove_duplicate_titles(order_list):
-    """
-    去除列表中title重复的项，只保留每个title第一次出现的项
-
-    参数:
-        order_list: 包含字典的列表，每个字典需要有 'title' 键
-
-    返回:
-        去重后的列表
-    """
-    seen_titles = set()
-    unique_orders = []
-
-    for order in order_list:
-        title = order.get('title')
-        if title not in seen_titles:
-            seen_titles.add(title)
-            unique_orders.append(order)
-
-    return unique_orders
-
-
-# 上午 -> 11:30 执行
-# 消防通道门日巡查 -> 10:10 ~ 10:15
-# 消防设施月巡检 -> 10:16 ~ 10:27
-# 四乱二扰日巡检（白） -> 10:28 ~ 10:33
-# 公共区域风险隐患排查日巡检工单 -> 10:34 ~ 10:39
-# 门岗BI&5S日巡检 -> 10:40 ~ 10:45
-# 外来人员清场日巡查工单 -> 10:46 ~ 10:48
-# 单元楼栋月巡检 -> 10:49 ~ 10:57
-# 天台风险月巡查 -> 11:10 ~ 10:18
-
-# 下午 -> 16:00 执行
-# 消防通道门日巡查 -> 14:10 ~ 14:15
-# 消防设施月巡检 -> 14:16 ~ 14:27
-# 单元楼栋月巡检 -> 14:28 ~ 14:36
-# 天台风险月巡查 -> 14:37 ~ 14:46
 
 # ====== 工单模板配置 ======
 ORDER_RULES = {

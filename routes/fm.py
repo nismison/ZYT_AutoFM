@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 
 import requests
@@ -12,6 +13,8 @@ from order_handler import OrderHandler, ORDER_RULES
 from oss_client import OSSClient
 from utils.crypter import generate_random_coordinates
 from utils.custom_raise import *
+
+from typing import Tuple, Dict, Any
 
 bp = Blueprint("fm", __name__)
 
@@ -374,6 +377,115 @@ def checkin_fm():
             "success": False,
             "error": f"{str(e)}",
         }), 500
+
+
+def resolve_order_template_path(target_order: Dict[str, Any]) -> Tuple[str, str, int]:
+    """
+    根据工单信息解析出数据库对应的: (category, sub_category, image_count)
+    """
+    title = target_order.get("title", "")
+    address = target_order.get("address", "")
+
+    # 1. 查找工单规则
+    rule = None
+    for key in ORDER_RULES:
+        if key in title:
+            rule = ORDER_RULES[key]
+            break
+
+    if not rule:
+        return "", "", 0
+
+    # 2. 提取分类
+    category = rule['template']
+    image_count = rule.get('image_count', 0)
+
+    # 3. 提取子分类 (特殊逻辑：单元楼栋月巡检)
+    sub_category = ""
+    if title == "单元楼栋月巡检":
+        matches = re.findall(r"[a-zA-Z]\d+", address)
+        if matches:
+            sub_category = matches[0]
+
+    return category, sub_category, image_count
+
+
+@bp.route('/api/fm/check_order_templates', methods=['POST'])
+def check_order_templates():
+    data = request.json
+    user_number = data.get('user_number')
+    order_id = data.get('order_id')
+
+    if not user_number or not order_id:
+        return jsonify({"success": False, "error": "缺少必要参数"}), 400
+
+    try:
+        # 1. 获取工单详情 (调用你现有的获取工单列表/详情的方法)
+        fm = FMApi(user_number=user_number)
+        target_order = fm.get_order_detail(order_id)
+
+        # 2. 解析工单对应的模板路径
+        category, sub_category, image_count = resolve_order_template_path(target_order)
+
+        if not category:
+            return jsonify({
+                "success": False,
+                "error": f"工单【{target_order.get('title')}】未匹配到任何模板规则"
+            }), 200
+
+        # 3. 匹配工单规则
+        title = target_order.get("title", "")
+        rule = next((ORDER_RULES[key] for key in ORDER_RULES if key in title), None)
+
+        if not rule:
+            return jsonify({"success": False, "error": f"未找到工单【{title}】匹配的规则"})
+
+        category = rule['template']
+        image_count = rule['image_count']
+        sub_category = ""
+
+        # 单元楼栋月巡检特殊处理：提取楼栋号
+        if title == "单元楼栋月巡检":
+            matches = re.findall(r"[a-zA-Z]\d+", target_order.get("address", ""))
+            if matches:
+                sub_category = matches[0]
+
+        # 4. Peewee 查询数据库
+        query = UserTemplatePic.select().where(
+            (UserTemplatePic.user_number == user_number) &
+            (UserTemplatePic.category == category) &
+            (UserTemplatePic.sub_category == sub_category)
+        )
+
+        # 将查询结果转换为列表字典
+        existing_pics = [
+            {"sequence": p.sequence, "url": p.cos_url}
+            for p in query
+        ]
+
+        # 5. 计算状态
+        found_sequences = {str(p['sequence']) for p in existing_pics}
+        missing_sequences = [
+            str(i + 1) for i in range(image_count)
+            if str(i + 1) not in found_sequences
+        ]
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "order_title": title,
+                "category": category,
+                "sub_category": sub_category,
+                "total_required": image_count,
+                "found_count": len(existing_pics),
+                "is_ready": len(missing_sequences) == 0,
+                "missing_sequences": missing_sequences,
+                "existing_pics": existing_pics
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @bp.route('/api/fm/upload_template', methods=['POST'])
