@@ -73,7 +73,7 @@ ORDER_RULES = {
         "func": order_template_XFSS,
         "image_count": 4,
     },
-    "四乱二扰日巡检（白）": {
+    "四乱二扰日巡检": {
         "template": "4L2R",
         "func": order_template_4L2R,
         "image_count": 2
@@ -118,7 +118,7 @@ ORDER_RULES = {
         "func": order_template_FJDCTFC,
         "image_count": 4,
     },
-    "围墙周界报警日巡检（白）": {
+    "围墙周界报警日巡检": {
         "template": "WQZJ",
         "func": order_template_WQZJ,
         "image_count": 3,
@@ -273,8 +273,12 @@ class OrderHandler:
         status = target_order["status"]
         order_id = target_order["id"]  # 用列表里的真实值覆盖一下
 
-        # 4️⃣ 获取规则
-        rule = ORDER_RULES.get(title)
+        # 4️⃣ 查找工单规则
+        rule = None
+        for key in ORDER_RULES:
+            if key in title:
+                rule = ORDER_RULES[key]
+
         if not rule:
             msg = f"未找到工单【{title}】对应的规则，无法处理"
             logger.warning(msg)
