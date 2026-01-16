@@ -567,7 +567,8 @@ def upload_template_pics():
 @bp.route('/api/fm/get_template_info', methods=['POST'])
 def get_template_info():
     """
-    动态查询接口：根据参数深度返回 子类列表 或 文件详情列表(含id和url)
+    动态查询接口：基于 ORDER_RULES 规则返回结构。
+    即使数据库无记录，也保证返回完整的目录。
     """
     params = request.get_json() if request.is_json else request.form
 
@@ -578,92 +579,83 @@ def get_template_info():
 
     if not user_number:
         return jsonify({
-            "success": False,
-            "data": {},
-            "error": "user_number is required",
-            "code": "PARAM_MISSING"
+            "success": False, "data": {},
+            "error": "user_number is required", "code": "PARAM_MISSING"
         })
 
     try:
-        template_alias = {v["template"]: k for k, v in ORDER_RULES.items()}
-
-        query_filter = [UserTemplatePic.user_number == user_number]
-
-        # --- 场景 1: 只传了 user_number -> 返回所有一级分类列表 ---
+        # 1. 场景一：根目录 -> 返回所有一级分类 (基于 ORDER_RULES)
         if not category:
-            categories = UserTemplatePic.select(UserTemplatePic.category).where(*query_filter).distinct()
+            # 直接从静态规则中获取所有分类
+            category_list = []
+            for name, rule in ORDER_RULES.items():
+                category_list.append({
+                    "code": rule["template"],
+                    "alias": name
+                })
             return jsonify({
                 "success": True,
-                "data": {
-                    "categories": [{
-                        "code": c.category,
-                        "alias": template_alias[c.category]
-                    } for c in categories]},
+                "data": {"categories": category_list},
                 "error": "", "code": "SUCCESS"
             })
 
-        # --- 场景 2: 传了 category，但没传 sub_category ---
-        query_filter.append(UserTemplatePic.category == category)
+        # 2. 获取当前分类对应的规则
+        # 通过 template code 反查规则
+        current_rule_name = next((name for name, v in ORDER_RULES.items() if v["template"] == category), None)
+        if not current_rule_name:
+            return jsonify({"success": False, "error": "Invalid category", "code": "INVALID_PARAM"})
+
+        rule = ORDER_RULES[current_rule_name]
+        image_count = rule["image_count"]
+
+        # 3. 场景二：选择了 category，返回子类或序号列表
         if not sub_category:
-            # 检查是否有非空的二级分类
-            sub_cats = UserTemplatePic.select(UserTemplatePic.sub_category).where(
-                *query_filter,
-                UserTemplatePic.sub_category != ""
-            ).distinct()
-
-            sub_cat_list = [sc.sub_category for sc in sub_cats]
-            if sub_cat_list:
+            # 如果是 DYL (单元楼栋)，返回固定的楼栋列表
+            if category == "DYL":
                 return jsonify({
                     "success": True,
-                    "data": {"sub_categories": sub_cat_list},
+                    "data": {
+                        "sub_categories": ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A9', 'A10', 'A11', 'A12', 'B1']},
                     "error": "", "code": "SUCCESS"
                 })
 
-            # 如果没有二级分类，且没传 sequence，返回序号列表
+            # 如果不是 DYL 且没传 sequence，说明该分类没有子类，直接返回 1 ~ image_count 序号
             if not sequence:
-                sequences = UserTemplatePic.select(UserTemplatePic.sequence).where(*query_filter).distinct()
                 return jsonify({
                     "success": True,
-                    "data": {"sequences": [s.sequence for s in sequences]},
+                    "data": {"sequences": [str(i) for i in range(1, image_count + 1)]},
                     "error": "", "code": "SUCCESS"
                 })
 
-        # --- 场景 3: 传了 sub_category，但没传 sequence ---
-        if sub_category:
-            query_filter.append(UserTemplatePic.sub_category == sub_category)
-            if not sequence:
-                sequences = UserTemplatePic.select(UserTemplatePic.sequence).where(*query_filter).distinct()
-                return jsonify({
-                    "success": True,
-                    "data": {"sequences": [s.sequence for s in sequences]},
-                    "error": "", "code": "SUCCESS"
-                })
+        # 4. 场景三：传了 sub_category，返回对应的序号列表 (1 ~ image_count)
+        if sub_category and not sequence:
+            return jsonify({
+                "success": True,
+                "data": {"sequences": [str(i) for i in range(1, image_count + 1)]},
+                "error": "", "code": "SUCCESS"
+            })
 
-        # --- 场景 4: 路径已锁定到 sequence -> 返回文件对象列表 (含 ID 和 URL) ---
+        # 5. 场景四：路径已锁定到 sequence -> 从数据库查询真实文件列表
         if sequence:
-            query_filter.append(UserTemplatePic.sequence == sequence)
-            # 同时查询 id 和 cos_url
+            query_filter = [UserTemplatePic.user_number == user_number, UserTemplatePic.category == category,
+                            UserTemplatePic.sequence == sequence,
+                            UserTemplatePic.sub_category == (sub_category if sub_category else "")]
+            # sub_category 可能为空字符串，需要匹配
+
             files = UserTemplatePic.select(UserTemplatePic.id, UserTemplatePic.cos_url).where(*query_filter)
 
-            # 构造包含 ID 的对象列表
-            file_list = [
-                {"id": f.id, "url": f.cos_url}
-                for f in files
-            ]
+            file_list = [{"id": f.id, "url": f.cos_url} for f in files]
 
             return jsonify({
                 "success": True,
                 "data": {"files": file_list},
-                "error": "",
-                "code": "SUCCESS"
+                "error": "", "code": "SUCCESS"
             })
 
     except Exception as e:
         return jsonify({
-            "success": False,
-            "data": {},
-            "error": str(e),
-            "code": "SERVER_ERROR"
+            "success": False, "data": {},
+            "error": str(e), "code": "SERVER_ERROR"
         })
 
 
