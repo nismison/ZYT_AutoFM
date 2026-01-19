@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import re
 from datetime import datetime
 
@@ -413,14 +414,14 @@ def resolve_order_template_path(target_order: Dict[str, Any]) -> Tuple[str, str,
 @bp.route('/api/fm/check_order_templates', methods=['POST'])
 def check_order_templates():
     try:
-        params = request.json
+        params = request.json or {}
         user_number = params.get('user_number')
         order_id = params.get('order_id')
 
         if not user_number or not order_id:
             return jsonify({"success": False, "error": "缺少必要参数"}), 400
 
-        # 1. 获取工单并匹配规则 (逻辑保持一致)
+        # 1. 获取工单并匹配规则
         fm = FMApi(user_number=user_number)
         target_order = fm.get_order_detail(order_id)
         title = target_order.get("title", "")
@@ -437,33 +438,63 @@ def check_order_templates():
             if matches:
                 sub_category = matches[0]
 
-        # 2. 核心逻辑：只查询存在的序号列表
-        # 使用 .select(UserTemplatePic.sequence) 只查序号列，减少数据传输
-        query = UserTemplatePic.select(UserTemplatePic.sequence).where(
+        # 2. 只查询已存在序号，用于判断是否齐全
+        seq_query = UserTemplatePic.select(UserTemplatePic.sequence).where(
             (UserTemplatePic.user_number == user_number) &
             (UserTemplatePic.category == category) &
             (UserTemplatePic.sub_category == sub_category)
         )
+        found_sequences = {str(p.sequence) for p in seq_query}
 
-        # 得到一个已存在序号的集合，例如: {'1', '2', '4'}
-        found_sequences = {str(p.sequence) for p in query}
-
-        # 3. 构造检查结果
         missing_sequences = [
-            str(i + 1) for i in range(image_count)
-            if str(i + 1) not in found_sequences
+            str(i) for i in range(1, image_count + 1)
+            if str(i) not in found_sequences
         ]
 
-        # 4. 只返回必要的状态
+        is_ready = len(missing_sequences) == 0
+
+        preview_pics = []
+        if is_ready:
+            # 3. 每个序号随机抽一张，带上数据库id返回给前端预览
+            for seq in range(1, image_count + 1):
+                candidates = list(
+                    UserTemplatePic.select(
+                        UserTemplatePic.id,
+                        UserTemplatePic.sequence,
+                        UserTemplatePic.cos_url
+                    ).where(
+                        (UserTemplatePic.user_number == user_number) &
+                        (UserTemplatePic.category == category) &
+                        (UserTemplatePic.sub_category == sub_category) &
+                        (UserTemplatePic.sequence == seq)
+                    )
+                )
+
+                # is_ready 为 True 时理论上不会为空，这里留一层保护
+                if not candidates:
+                    missing_sequences.append(str(seq))
+                    is_ready = False
+                    continue
+
+                picked = random.choice(candidates)
+                preview_pics.append({
+                    "id": picked.id,
+                    "sequence": str(picked.sequence),
+                    "url": picked.cos_url,
+                })
+
         return jsonify({
             "success": True,
             "data": {
                 "category": category,
                 "sub_category": sub_category,
-                "is_ready": len(missing_sequences) == 0,  # 图片是否全齐
-                "total_required": image_count,  # 总共需要几张
-                "found_count": len(found_sequences),  # 实际有几张
-                "missing_sequences": missing_sequences  # 缺失的序号列表
+                "is_ready": is_ready,
+                "total_required": image_count,
+                # 这里保持“已覆盖的序号数”，跟原先 found_sequences 语义一致
+                "found_count": len(found_sequences),
+                "missing_sequences": missing_sequences,
+                # 齐全时给前端预览，不齐全时返回空数组
+                "preview_pics": preview_pics
             }
         })
 
