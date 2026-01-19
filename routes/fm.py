@@ -28,7 +28,7 @@ def complete_fm():
     order_id = (payload.get("order_id", "") or "").strip()
     user_name = (payload.get("user_name", "") or "").strip()
     user_number = (payload.get("user_number", "") or "").strip()
-    template_pics = (payload.get("template_pics", []) or []).strip()
+    template_pics = (payload.get("template_pics", []) or [])
 
     if not all([user_name, user_number]):
         return jsonify({
