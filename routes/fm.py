@@ -28,6 +28,7 @@ def complete_fm():
     order_id = (payload.get("order_id", "") or "").strip()
     user_name = (payload.get("user_name", "") or "").strip()
     user_number = (payload.get("user_number", "") or "").strip()
+    template_pics = (payload.get("template_pics", []) or []).strip()
 
     if not all([user_name, user_number]):
         return jsonify({
@@ -58,9 +59,9 @@ def complete_fm():
     try:
         result = None
         if keyword:
-            result = handler.complete_order_by_keyword(records, keyword, user_name, user_number)
+            result = handler.complete_order_by_keyword(records, keyword, user_name, user_number, template_pics)
         if order_id:
-            result = handler.complete_order_by_id(records, order_id, user_name, user_number)
+            result = handler.complete_order_by_id(records, order_id, user_name, user_number, template_pics)
         if result:
             return jsonify({
                 "success": True,

@@ -8,7 +8,7 @@ import uuid
 from typing import Optional, Literal, List
 
 from order_template import *
-from oss_client import get_random_template_url_from_db, download_temp_image
+from oss_client import get_random_template_url_from_db, download_temp_image, get_template_url_by_id_from_db
 from tasks.watermark_task import add_watermark_to_image
 from utils.custom_raise import *
 from utils.notification import Notify
@@ -136,7 +136,7 @@ class OrderHandler:
         self.tmp_dir = os.path.join(tempfile.gettempdir(), "order_watermarks")
         os.makedirs(self.tmp_dir, exist_ok=True)
 
-    def complete_order_by_keyword(self, order_list, keyword: str, user: str, user_number: str):
+    def complete_order_by_keyword(self, order_list, keyword: str, user: str, user_number: str, template_pics: List):
         """
         按关键字自动完成工单（对外接口）
         """
@@ -147,9 +147,10 @@ class OrderHandler:
             user_number=user_number,
             keyword=keyword,
             order_id=None,
+            template_pics=template_pics,
         )
 
-    def complete_order_by_id(self, order_list, order_id, user: str, user_number: str):
+    def complete_order_by_id(self, order_list, order_id, user: str, user_number: str, template_pics: List):
         """
         按工单 ID 自动完成工单（对外接口）
         """
@@ -160,6 +161,7 @@ class OrderHandler:
             user_number=user_number,
             keyword=None,
             order_id=order_id,
+            template_pics=template_pics,
         )
 
     def _complete_order(
@@ -170,6 +172,7 @@ class OrderHandler:
             user_number: str,
             keyword: Optional[str],
             order_id,
+            template_pics,
     ):
         """
         统一的工单处理流水线：
@@ -272,6 +275,7 @@ class OrderHandler:
         image_paths: List[str] = []
         downloaded_templates: List[str] = []  # 记录下载到本地的模板路径，用于后续清理
 
+        use_fixed_template_ids = bool(template_pics) and len(template_pics) == image_count
         try:
             for i in range(image_count):
                 # 1. 确定分类和子分类逻辑
@@ -285,7 +289,28 @@ class OrderHandler:
                         sub_category = matches[0]
 
                 # 2. 从数据库获取随机 URL
-                cos_url = get_random_template_url_from_db(user_number, category, sub_category, sequence)
+                cos_url = None
+
+                if use_fixed_template_ids:
+                    # template_pics 存的是每个序号对应的数据库 id
+                    try:
+                        pic_id = template_pics[i]
+                        pic_id = int(pic_id)
+                    except Exception:
+                        pic_id = None
+
+                    if pic_id is not None:
+                        cos_url = get_template_url_by_id_from_db(
+                            pic_id=pic_id,
+                            user_number=user_number,
+                            category=category,
+                            sub_category=sub_category,
+                            sequence=sequence,
+                        )
+                else:
+                    cos_url = get_random_template_url_from_db(
+                        user_number, category, sub_category, sequence
+                    )
 
                 # 3. 下载模板到本地临时目录
                 if cos_url:

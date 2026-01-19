@@ -52,6 +52,30 @@ def get_random_template_url_from_db(user_number, category, sub_category="", sequ
     return None  # 如果没找到，由上层逻辑处理 fallback
 
 
+def get_template_url_by_id_from_db(
+        pic_id,
+        user_number: str,
+        category: str,
+        sub_category: str = "",
+        sequence: str = "1",
+):
+    """按数据库 id 获取 COS URL，并校验归属与分类信息"""
+    try:
+        row = UserTemplatePic.get_or_none(
+            (UserTemplatePic.id == pic_id) &
+            (UserTemplatePic.user_number == user_number) &
+            (UserTemplatePic.category == category) &
+            (UserTemplatePic.sub_category == (sub_category or "")) &
+            (UserTemplatePic.sequence == str(sequence))
+        )
+        if row:
+            return row.cos_url
+    except Exception as e:
+        logger.error(f"按ID查询模板失败: id={pic_id}, {e}")
+
+    return None
+
+
 class OSSClient:
     def __init__(self, session, token):
         self.session = session
