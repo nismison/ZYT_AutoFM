@@ -253,7 +253,7 @@ def update_all_user_tokens():
     - 根据 COS STS 的 expiredTime 判断是否需要刷新 cos_token（小于 10 分钟才刷新）
     - 将 baichuan_token / baichuan_expires / cos_token 写回 user_info 表
     """
-    users = UserInfo.select().where(UserInfo.token.is_null(False))
+    users = UserInfo.select().where(UserInfo.token.is_null(False) and UserInfo.token_expires > int(time.time()))
 
     total = users.count()
     print(f"{'=' * 25} 刷新用户 Token 开始，共 {total} 条记录 {'=' * 25}")

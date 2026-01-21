@@ -117,6 +117,7 @@ WORKERS=(
   "CHECKIN_SERVER|$REPO_PATH/checkin_server.py|$REPO_PATH/checkin_server.log"
   "REFRESH_TOKEN_SERVER|$REPO_PATH/refresh_token_server.py|$REPO_PATH/refresh_token_server.log"
   "FM_COMPLETE_WORKER|$REPO_PATH/fm_complete_worker.py|$REPO_PATH/fm_complete_worker.log"
+  "NIGHT_ANSWER_SERVER|$REPO_PATH/night_answer_server.py|$REPO_PATH/night_answer_server.log"
 )
 
 for item in "${WORKERS[@]}"; do
