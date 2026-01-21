@@ -338,7 +338,7 @@ def create_tables_once():
     """
     init_database_connection()
     db.create_tables(
-        [UploadRecord, UploadTask, UserInfo, File, UploadSession, UploadPart, UserTemplatePic],
+        [UploadRecord, UploadTask, UserInfo, File, UploadSession, UploadPart, UserTemplatePic, CompleteTask],
         safe=True,
     )
     log_line("[INFO] MySQL 数据库表结构检查/初始化完成")
