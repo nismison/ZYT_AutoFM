@@ -85,6 +85,7 @@ def create_complete_task():
 
     keyword = (payload.get("keyword", "") or "").strip()
     order_id = (payload.get("order_id", "") or "").strip()
+    order_name = (payload.get("order_name", "") or "").strip()
     user_name = (payload.get("user_name", "") or "").strip()
     user_number = (payload.get("user_number", "") or "").strip()
     template_pics = (payload.get("template_pics", []) or [])
@@ -104,6 +105,7 @@ def create_complete_task():
         mode=mode,
         keyword=keyword or None,
         order_id=order_id or None,
+        order_name=order_name or None,
         user_name=user_name,
         user_number=user_number,
         template_pics_json=json.dumps(template_pics, ensure_ascii=False),
@@ -134,6 +136,7 @@ def get_task(task_id: int):
             "mode": task.mode,
             "keyword": task.keyword,
             "order_id": task.order_id,
+            "order_name": task.order_name,
             "user_name": task.user_name,
             "user_number": task.user_number,
             "template_pics_json": task.template_pics_json,
@@ -176,6 +179,7 @@ def list_tasks():
                     "mode": t.mode,
                     "keyword": t.keyword,
                     "order_id": t.order_id,
+                    "order_name": t.order_name,
                     "user_number": t.user_number,
                     "created_at": t.created_at.isoformat() if t.created_at else None,
                     "updated_at": t.updated_at.isoformat() if t.updated_at else None,

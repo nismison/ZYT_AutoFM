@@ -266,6 +266,7 @@ class CompleteTask(BaseModel):
     mode = CharField(max_length=20)  # keyword / id
     keyword = CharField(max_length=255, null=True)
     order_id = CharField(max_length=64, null=True)
+    order_name = CharField(max_length=255, null=True)
 
     user_name = CharField(max_length=64)
     user_number = CharField(max_length=64)
