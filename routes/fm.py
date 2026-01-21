@@ -3,19 +3,17 @@ import os
 import random
 import re
 from datetime import datetime
+from typing import Tuple, Dict, Any
 
 import requests
 from flask import Blueprint, jsonify, request
 
 from apis.fm_api import FMApi
 from config import TZ
-from db import UserInfo, UserTemplatePic
+from db import UserInfo, UserTemplatePic, CompleteTask
 from order_handler import OrderHandler, ORDER_RULES
 from oss_client import OSSClient
 from utils.crypter import generate_random_coordinates
-from utils.custom_raise import *
-
-from typing import Tuple, Dict, Any
 
 bp = Blueprint("fm", __name__)
 
@@ -74,26 +72,117 @@ def complete_fm():
                 "error": "未找到工单",
                 "code": "ORDER_NOT_FOUND"
             }), 500
-    except OrderNotFoundError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
-    except UserNotFoundError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
-    except (RuleNotFoundError, ImageUploadError, PartialUploadError) as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-        }), 500
     except Exception as e:
         return jsonify({
             "success": False,
             "error": str(e),
         }), 500
+
+
+@bp.route("/api/fm/complete_task", methods=["POST"])
+def create_complete_task():
+    payload = request.get_json(silent=True) or {}
+
+    keyword = (payload.get("keyword", "") or "").strip()
+    order_id = (payload.get("order_id", "") or "").strip()
+    user_name = (payload.get("user_name", "") or "").strip()
+    user_number = (payload.get("user_number", "") or "").strip()
+    template_pics = (payload.get("template_pics", []) or [])
+
+    if not user_name or not user_number:
+        return jsonify({"success": False, "error": "缺少参数", "code": "INVALID_PARAM"}), 400
+
+    if keyword and order_id:
+        return jsonify({"success": False, "error": "keyword和order_id不能同时使用", "code": "INVALID_PARAM"}), 400
+
+    if (not keyword) and (not order_id):
+        return jsonify({"success": False, "error": "缺少参数", "code": "INVALID_PARAM"}), 400
+
+    mode = "keyword" if keyword else "id"
+
+    task = CompleteTask.create(
+        mode=mode,
+        keyword=keyword or None,
+        order_id=order_id or None,
+        user_name=user_name,
+        user_number=user_number,
+        template_pics_json=json.dumps(template_pics, ensure_ascii=False),
+        status="pending",
+        created_at=datetime.now(TZ),
+        updated_at=datetime.now(TZ),
+    )
+
+    return jsonify({
+        "success": True,
+        "error": "",
+        "data": {"task_id": task.id, "status": task.status},
+    })
+
+
+@bp.route("/api/fm/tasks/<int:task_id>", methods=["GET"])
+def get_task(task_id: int):
+    task = CompleteTask.get_or_none(CompleteTask.id == task_id)
+    if not task:
+        return jsonify({"success": False, "error": "任务不存在", "code": "TASK_NOT_FOUND"}), 404
+
+    return jsonify({
+        "success": True,
+        "error": "",
+        "data": {
+            "id": task.id,
+            "status": task.status,
+            "mode": task.mode,
+            "keyword": task.keyword,
+            "order_id": task.order_id,
+            "user_name": task.user_name,
+            "user_number": task.user_number,
+            "template_pics_json": task.template_pics_json,
+            "result_json": task.result_json,
+            "error": task.error,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+        }
+    })
+
+
+@bp.route("/api/fm/tasks", methods=["GET"])
+def list_tasks():
+    status = (request.args.get("status") or "").strip().lower()
+    user_number = (request.args.get("user_number") or "").strip()
+
+    limit = min(int(request.args.get("limit", 20)), 100)
+    offset = max(int(request.args.get("offset", 0)), 0)
+
+    q = CompleteTask.select().order_by(CompleteTask.id.desc())
+    if status:
+        q = q.where(CompleteTask.status == status)
+    if user_number:
+        q = q.where(CompleteTask.user_number == user_number)
+
+    total = q.count()
+    items = list(q.limit(limit).offset(offset))
+
+    return jsonify({
+        "success": True,
+        "error": "",
+        "data": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "items": [
+                {
+                    "id": t.id,
+                    "status": t.status,
+                    "mode": t.mode,
+                    "keyword": t.keyword,
+                    "order_id": t.order_id,
+                    "user_number": t.user_number,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                } for t in items
+            ],
+        }
+    })
 
 
 @bp.route("/api/fm/users", methods=["POST"])

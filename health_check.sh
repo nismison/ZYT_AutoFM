@@ -31,6 +31,7 @@ check_single_process "upload_worker.py"
 check_single_process "merge_worker.py"
 check_single_process "checkin_server.py"
 check_single_process "refresh_token_server.py"
+check_single_process "fm_complete_worker.py"
 
 # 检查 Gunicorn
 GUNICORN_PIDS=$(pgrep -f "gunicorn.*ZYT_AutoFM.*flask_server:app" || true)

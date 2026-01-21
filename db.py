@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pymysql
+import json
 from peewee import (
     Model,
     AutoField,
@@ -9,7 +10,7 @@ from peewee import (
     IntegerField,
     DateTimeField,
     ForeignKeyField,
-    BooleanField,
+    BooleanField, TextField,
 )
 
 from config import db, TZ
@@ -252,6 +253,51 @@ class UserTemplatePic(BaseModel):
             # 复合索引，极大提升“按逻辑路径筛选”的查询速度
             (('user_number', 'category', 'sub_category', 'sequence'), False),
         )
+
+
+class CompleteTask(BaseModel):
+    """
+    后台异步 complete FM 工单的任务队列
+    由 /api/fm/complete_task 写入任务
+    后台 worker 定时轮询消费
+    """
+    id = AutoField()
+
+    mode = CharField(max_length=20)  # keyword / id
+    keyword = CharField(max_length=255, null=True)
+    order_id = CharField(max_length=64, null=True)
+
+    user_name = CharField(max_length=64)
+    user_number = CharField(max_length=64)
+
+    template_pics_json = TextField(default="[]")  # json.dumps 后的字符串
+
+    status = CharField(max_length=20, default="pending")
+    # 状态：pending / processing / done / failed
+
+    lock_token = CharField(max_length=64, null=True, index=True)
+    locked_at = DateTimeField(null=True)
+
+    result_json = TextField(null=True)  # json.dumps 后的字符串
+    error = TextField(null=True)
+
+    created_at = DateTimeField(default=lambda: datetime.now(TZ))
+    updated_at = DateTimeField(default=lambda: datetime.now(TZ))
+
+    class Meta:
+        table_name = "fm_complete_task"
+        indexes = (
+            (("status", "created_at"), False),
+            (("user_number", "created_at"), False),
+            (("order_id", "created_at"), False),
+            (("lock_token",), False),
+        )
+
+    def template_pics(self):
+        try:
+            return json.loads(self.template_pics_json or "[]")
+        except Exception:
+            return []
 
 
 # =========================
