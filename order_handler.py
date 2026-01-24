@@ -130,7 +130,7 @@ class OrderHandler:
     def __init__(self, fm, oss):
         self.fm = fm
         self.oss = oss
-        self.notify = Notify()
+        # self.notify = Notify()
 
         # 设置统一临时目录
         self.tmp_dir = os.path.join(tempfile.gettempdir(), "order_watermarks")
@@ -397,7 +397,7 @@ class OrderHandler:
         payload = rule["func"](order_id, *uploaded_urls)
         self.fm.submit_order(payload)
         logger.info(f"{log_prefix} 提交工单: {json.dumps(payload, ensure_ascii=False)}")
-        self.notify.send(f"工单【{title}】已完成{notify_suffix}")
+        # self.notify.send(f"工单【{title}】已完成{notify_suffix}")
 
         logger.info(f"工单【{title}】{mode_desc}处理完成 ✅")
 
