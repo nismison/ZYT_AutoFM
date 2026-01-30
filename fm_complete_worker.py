@@ -1,5 +1,6 @@
 import json
 import time
+import concurrent.futures
 from datetime import datetime
 
 from config import TZ
@@ -61,34 +62,45 @@ def complete_task_worker():
             except Exception:
                 template_pics = []
 
-            fm = FMApi()
-            oss = OSSClient(fm.session, fm.token)
-            handler = OrderHandler(fm, oss)
+            # 定义执行逻辑
+            def run_task():
+                fm = FMApi()
+                oss = OSSClient(fm.session, fm.token)
+                handler = OrderHandler(fm, oss)
 
-            records = fm.get_need_deal_list()
+                records = fm.get_need_deal_list()
 
-            if task.mode == "keyword":
-                if not task.keyword:
-                    raise RuntimeError("任务缺少 keyword")
-                result = handler.complete_order_by_keyword(
-                    records,
-                    task.keyword,
-                    task.user_name,
-                    task.user_number,
-                    template_pics,
-                )
-            elif task.mode == "id":
-                if not task.order_id:
-                    raise RuntimeError("任务缺少 order_id")
-                result = handler.complete_order_by_id(
-                    records,
-                    task.order_id,
-                    task.user_name,
-                    task.user_number,
-                    template_pics,
-                )
-            else:
-                raise RuntimeError(f"未知任务 mode: {task.mode}")
+                if task.mode == "keyword":
+                    if not task.keyword:
+                        raise RuntimeError("任务缺少 keyword")
+                    return handler.complete_order_by_keyword(
+                        records,
+                        task.keyword,
+                        task.user_name,
+                        task.user_number,
+                        template_pics,
+                    )
+                elif task.mode == "id":
+                    if not task.order_id:
+                        raise RuntimeError("任务缺少 order_id")
+                    return handler.complete_order_by_id(
+                        records,
+                        task.order_id,
+                        task.user_name,
+                        task.user_number,
+                        template_pics,
+                    )
+                else:
+                    raise RuntimeError(f"未知任务 mode: {task.mode}")
+
+            # 使用线程池执行并设置超时
+            timeout_seconds = 120  # 2分钟超时
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_task)
+                    result = future.result(timeout=timeout_seconds)
+            except concurrent.futures.TimeoutError:
+                raise RuntimeError(f"任务执行超时（超过 {timeout_seconds} 秒）")
 
             # 标记任务完成
             (

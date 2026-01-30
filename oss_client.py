@@ -97,7 +97,10 @@ class OSSClient:
         self.oss = json.loads(_oss)
         return self.oss
 
-    def upload(self, file_path):
+    def upload(self, file_path, retry_count=0):
+        if retry_count > 3:
+            raise RuntimeError(f"文件上传多次失败: {file_path}")
+
         if not self.oss:
             self.get_oss_policy()
 
@@ -179,7 +182,7 @@ class OSSClient:
 
         try:
             with open(file_path, "rb") as f:
-                r = self.session.put(upload_url, data=f, headers=headers)
+                r = self.session.put(upload_url, data=f, headers=headers, timeout=30)
 
             if r.status_code in [200, 204]:
                 logger.info(f"文件上传完成: {upload_url}")
@@ -191,7 +194,9 @@ class OSSClient:
                 if r.status_code == 403:
                     logger.info("尝试刷新 COS 凭证...")
                     self.get_oss_policy()
-                return self.upload(file_path)
+                
+                # 递归重试时增加计数
+                return self.upload(file_path, retry_count=retry_count + 1)
         except Exception as e:
             logger.error(f"上传异常: {str(e)}")
             raise
