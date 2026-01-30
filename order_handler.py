@@ -314,7 +314,7 @@ class OrderHandler:
 
                 # 3. 下载模板到本地临时目录
                 if cos_url:
-                    original_image_path = download_temp_image(cos_url, self.tmp_dir)
+                    original_image_path = download_temp_image(f"{cos_url}?imageMogr2/format/jpg", self.tmp_dir)
                 else:
                     # Fallback 逻辑：如果数据库没有，使用本地的 black.jpg
                     original_image_path = "black.jpg"
