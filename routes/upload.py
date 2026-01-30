@@ -258,8 +258,11 @@ def upload_to_oss():
 
         return jsonify({
             "success": True,
-            "urls": urls,
-            "count": len(urls)
+            "error": "",
+            "data": {
+                "urls": urls,
+                "count": len(urls)
+            }
         })
 
     except Exception as e:
