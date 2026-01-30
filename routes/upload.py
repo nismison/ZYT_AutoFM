@@ -10,6 +10,8 @@ from werkzeug.utils import secure_filename
 
 from config import WATERMARK_STORAGE_DIR, IMMICH_EXTERNAL_HOST_ROOT, TZ
 from db import UploadRecord, UploadTask
+from apis.fm_api import FMApi
+from oss_client import OSSClient
 from tasks.watermark_task import watermark_runner
 from utils.logger import log_line
 from utils.merge import merge_images_grid
@@ -197,6 +199,67 @@ def upload_with_watermark():
             "success": True,
             "oss_urls": oss_urls,
             "count": len(oss_urls)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@bp.route("/api/upload_to_oss", methods=["POST"])
+def upload_to_oss():
+    """
+    上传文件到 OSS：
+    - 接收 user_number 和 files
+    - 调用 FMApi 和 OSSClient 进行上传
+    """
+    try:
+        user_number = request.form.get("user_number")
+        if not user_number:
+            return jsonify({"success": False, "error": "缺少 user_number"}), 400
+
+        files = []
+        for key in request.files.keys():
+            files.extend(request.files.getlist(key))
+        if not files and "file" in request.files:
+            files = [request.files["file"]]
+
+        if not files:
+            return jsonify({"success": False, "error": "没有上传文件"}), 400
+
+        fm = FMApi(user_number=user_number)
+        oss = OSSClient(fm.session, fm.token)
+
+        urls = []
+        temp_paths = []
+        for f in files:
+            suffix = os.path.splitext(f.filename or "")[1].lower()
+            if not suffix:
+                suffix = ".jpg"
+
+            fd, temp_path = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            f.save(temp_path)
+            temp_paths.append(temp_path)
+
+            url = oss.upload(temp_path)
+            urls.append(url)
+
+        # 清理临时文件
+        for p in temp_paths:
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+
+        return jsonify({
+            "success": True,
+            "urls": urls,
+            "count": len(urls)
         })
 
     except Exception as e:
