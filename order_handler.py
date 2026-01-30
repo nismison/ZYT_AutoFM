@@ -8,7 +8,7 @@ import uuid
 from typing import Optional, Literal, List
 
 from order_template import *
-from oss_client import get_random_template_url_from_db, download_temp_image, get_template_url_by_id_from_db
+from oss_client import get_random_template_url_from_db, download_temp_image
 from tasks.watermark_task import add_watermark_to_image
 from utils.custom_raise import *
 from utils.notification import Notify
@@ -275,7 +275,7 @@ class OrderHandler:
         image_paths: List[str] = []
         downloaded_templates: List[str] = []  # 记录下载到本地的模板路径，用于后续清理
 
-        use_fixed_template_ids = bool(template_pics) and len(template_pics) == image_count
+        use_provided_urls = bool(template_pics) and len(template_pics) == image_count
         try:
             for i in range(image_count):
                 # 1. 确定分类和子分类逻辑
@@ -288,26 +288,14 @@ class OrderHandler:
                     if matches:
                         sub_category = matches[0]
 
-                # 2. 从数据库获取随机 URL
+                # 2. 获取图片 URL
                 cos_url = None
 
-                if use_fixed_template_ids:
-                    # template_pics 存的是每个序号对应的数据库 id
-                    try:
-                        pic_id = template_pics[i]
-                        pic_id = int(pic_id)
-                    except Exception:
-                        pic_id = None
-
-                    if pic_id is not None:
-                        cos_url = get_template_url_by_id_from_db(
-                            pic_id=pic_id,
-                            user_number=user_number,
-                            category=category,
-                            sub_category=sub_category,
-                            sequence=sequence,
-                        )
+                if use_provided_urls:
+                    # template_pics 直接存的就是 URL 列表
+                    cos_url = template_pics[i]
                 else:
+                    # 从数据库获取随机 URL
                     cos_url = get_random_template_url_from_db(
                         user_number, category, sub_category, sequence
                     )
