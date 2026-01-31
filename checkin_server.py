@@ -17,13 +17,13 @@ notify = Notify()
 def load_users():
     """加载用户列表（示例结构）。"""
     user_list = [
-        {
-            "name": "梁振卓",
-            "mobile": "19127224860",
-            "device_model": "24069RA21C",
-            "device_uuid": "D27C69E56B989C9A",
-            "banci": "day",
-        },
+        # {
+        #     "name": "梁振卓",
+        #     "mobile": "19127224860",
+        #     "device_model": "24069RA21C",
+        #     "device_uuid": "D27C69E56B989C9A",
+        #     "banci": "day",
+        # },
         {
             "name": "苏美超",
             "mobile": "19911211678",
@@ -31,13 +31,13 @@ def load_users():
             "device_uuid": "BAB129B3C9A3E482",
             "banci": "day",
         },
-        {
-            "name": "杨蒋倩",
-            "mobile": "19978804634",
-            "device_model": "V1962A",
-            "device_uuid": "146911049E59810B",
-            "banci": "day",
-        },
+        # {
+        #     "name": "杨蒋倩",
+        #     "mobile": "19978804634",
+        #     "device_model": "V1962A",
+        #     "device_uuid": "146911049E59810B",
+        #     "banci": "day",
+        # },
         {
             "name": "李国刚",
             "mobile": "19968076805",
